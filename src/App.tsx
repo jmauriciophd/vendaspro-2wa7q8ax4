@@ -17,6 +17,9 @@ import Relatorios from './pages/Relatorios'
 import Metas from './pages/Metas'
 import Commissions from './pages/Commissions'
 import SalesFunnel from './pages/SalesFunnel'
+import Notificacoes from './pages/Notificacoes'
+import CategoryGoals from './pages/CategoryGoals'
+import SellerDashboard from './pages/SellerDashboard'
 import NotFound from './pages/NotFound'
 import { useAuth } from '@/context/AuthContext'
 
@@ -48,6 +51,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route element={<Layout />}>
             <Route path="/" element={<Index />} />
+            <Route path="/meu-dashboard" element={<SellerDashboard />} />
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/clientes/:id" element={<ClienteDetalhe />} />
@@ -64,8 +68,10 @@ const App = () => (
             />
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/metas" element={<Metas />} />
+            <Route path="/metas/categorias" element={<CategoryGoals />} />
             <Route path="/comissoes" element={<Commissions />} />
             <Route path="/pipeline-funil" element={<SalesFunnel />} />
+            <Route path="/notificacoes" element={<Notificacoes />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

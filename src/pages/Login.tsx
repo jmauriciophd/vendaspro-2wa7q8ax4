@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import pb from '@/lib/pocketbase/client'
 import {
   Store,
   Lock,
@@ -59,8 +60,15 @@ export default function Login() {
         await register(name.trim(), email.trim(), password)
         toast.success('Conta criada com sucesso!')
       }
-      const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/'
-      navigate(from, { replace: true })
+      const fromRaw = (location.state as { from?: { pathname?: string } })?.from?.pathname
+      // Redirecionamento por role: vendedor -> /meu-dashboard; demais -> / (ou from explícito)
+      const loggedInUser = pb.authStore.record as { role?: string } | null
+      const userRole = loggedInUser?.role
+      let target = fromRaw && fromRaw !== '/login' ? fromRaw : '/'
+      if (userRole === 'vendedor' && (!fromRaw || fromRaw === '/')) {
+        target = '/meu-dashboard'
+      }
+      navigate(target, { replace: true })
     } catch (err: any) {
       console.error(err)
       toast.error(

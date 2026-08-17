@@ -378,34 +378,97 @@ routerAdd(
       return e.json(404, { message: 'Comissão não encontrada.' })
     }
 
-    rec.set('status', newStatus)
-    if (newStatus === 'paid') {
-      const now = new Date()
-      const pad = function (n) {
-        return n < 10 ? '0' + n : '' + n
+    const sellerId = rec.get('seller') || ''
+    const saleValue = rec.get('sale_value') || 0
+    const commissionValue = rec.get('commission_value') || 0
+    const saleId = rec.get('sale') || ''
+
+    // Busca dados do pedido/cliente para montar a mensagem
+    let customerName = ''
+    let saleRef = ''
+    try {
+      const sale = $app.findRecordById('sales', saleId)
+      saleRef = '#' + sale.id.slice(-6).toUpperCase()
+      const custId = sale.get('customer') || ''
+      if (custId) {
+        try {
+          const cust = $app.findRecordById('customers', custId)
+          customerName = cust.get('name') || ''
+        } catch (_) {}
       }
-      const dateStr =
-        now.getUTCFullYear() +
-        '-' +
-        pad(now.getUTCMonth() + 1) +
-        '-' +
-        pad(now.getUTCDate()) +
-        ' ' +
-        pad(now.getUTCHours()) +
-        ':' +
-        pad(now.getUTCMinutes()) +
-        ':' +
-        pad(now.getUTCSeconds()) +
-        '.000Z'
-      rec.set('paid_at', dateStr)
-    } else {
-      rec.set('paid_at', '')
+    } catch (_) {}
+
+    const statusLabels = {
+      pending: 'marcada como Pendente',
+      approved: 'aprovada',
+      paid: 'paga',
+      cancelled: 'cancelada',
     }
-    $app.save(rec)
+
+    // Atualiza comissão + cria notificação em transação atômica
+    $app.runInTransaction(function (txApp) {
+      let txRec
+      try {
+        txRec = txApp.findRecordById('commissions', id)
+      } catch (_) {
+        throw new Error('Comissão não encontrada.')
+      }
+
+      txRec.set('status', newStatus)
+      if (newStatus === 'paid') {
+        const now = new Date()
+        const pad = function (n) {
+          return n < 10 ? '0' + n : '' + n
+        }
+        const dateStr =
+          now.getUTCFullYear() +
+          '-' +
+          pad(now.getUTCMonth() + 1) +
+          '-' +
+          pad(now.getUTCDate()) +
+          ' ' +
+          pad(now.getUTCHours()) +
+          ':' +
+          pad(now.getUTCMinutes()) +
+          ':' +
+          pad(now.getUTCSeconds()) +
+          '.000Z'
+        txRec.set('paid_at', dateStr)
+      } else {
+        txRec.set('paid_at', '')
+      }
+      txApp.save(txRec)
+
+      // Cria notificação automática para o vendedor
+      if (sellerId) {
+        const notifCol = txApp.findCollectionByNameOrId('notifications')
+        const notif = new Record(notifCol)
+        notif.set('user', sellerId)
+        notif.set('type', 'commission')
+        notif.set('title', 'Comissão ' + (statusLabels[newStatus] || 'atualizada'))
+        const valorStr = 'R$ ' + commissionValue.toFixed(2).replace('.', ',')
+        const msgParts = [
+          'Sua comissão do pedido ' +
+            (saleRef || '#' + saleId.slice(-6)) +
+            ' foi ' +
+            (statusLabels[newStatus] || 'atualizada') +
+            '.',
+          'Valor: ' + valorStr,
+        ]
+        if (customerName) {
+          msgParts.push('Cliente: ' + customerName)
+        }
+        notif.set('message', msgParts.join(' '))
+        notif.set('reference_type', 'commission')
+        notif.set('reference_id', txRec.id)
+        notif.set('is_read', false)
+        txApp.save(notif)
+      }
+    })
 
     return e.json(200, {
       id: rec.id,
-      status: rec.get('status'),
+      status: newStatus,
       paid_at: rec.get('paid_at') || '',
     })
   },

@@ -1,4 +1,5 @@
-// Tipos TypeScript para os novos módulos: Comissões, Funil e Importação de Clientes.
+// Tipos TypeScript para os novos módulos: Comissões, Funil, Importação de Clientes,
+// Notificações, Metas por Categoria, Dashboard do Vendedor e Dashboard Admin.
 
 import type { RecordModel } from 'pocketbase'
 
@@ -170,4 +171,176 @@ export interface ClientImportResult {
   duplicates: number
   errors: number
   details: ClientImportDetail[]
+}
+
+// ===========================================================================
+// Notificações
+// ===========================================================================
+
+export type NotificationType = 'commission' | 'order' | 'quote' | 'stock' | 'system'
+
+export interface AppNotification extends RecordModel {
+  id: string
+  user: string
+  type: NotificationType
+  title: string
+  message: string
+  reference_type: string
+  reference_id: string
+  is_read: boolean
+  created: string
+  updated: string
+}
+
+export interface UnreadCount {
+  count: number
+}
+
+// ===========================================================================
+// Metas por Categoria
+// ===========================================================================
+
+export interface CategoryGoal extends RecordModel {
+  id: string
+  category: string
+  target_value: number
+  month: number
+  year: number
+  active: boolean
+  created: string
+  updated: string
+  sales_value: number
+  percentage: number
+  remaining: number
+  quantity: number
+}
+
+export interface CategoryGoalPerformance {
+  category: string
+  targetValue: number
+  salesValue: number
+  percentage: number
+  remaining: number
+  quantity: number
+}
+
+export interface CategoryGoalInput {
+  category: string
+  target_value: number
+  month: number
+  year: number
+  active?: boolean
+}
+
+// ===========================================================================
+// Dashboard do Vendedor
+// ===========================================================================
+
+export interface SellerDashboardSummary {
+  salesToday: number
+  salesMonth: number
+  ordersMonth: number
+  averageTicket: number
+  commissionMonth: number
+  goalPercentage: number
+  targetValue: number
+  commissionPending: number
+  commissionApproved: number
+  commissionPaid: number
+}
+
+export interface SellerRecentOrder {
+  id: string
+  sale_date: string
+  total: number
+  payment_method: string
+  payment_status: string
+  customer_name: string
+}
+
+export interface SellerCommission {
+  id: string
+  sale: string
+  sale_ref: string
+  sale_date: string
+  customer_name: string
+  sale_value: number
+  commission_percentage: number
+  commission_value: number
+  status: 'pending' | 'approved' | 'paid' | 'cancelled'
+  reference_month: string
+  paid_at: string
+}
+
+export interface SellerGoals {
+  id: string
+  month: string
+  targetValue: number
+  salesValue: number
+  percentage: number
+}
+
+export interface SellerTopProduct {
+  id: string
+  name: string
+  quantity: number
+  total: number
+}
+
+export interface SellerDashboard {
+  seller: { id: string; name: string; email: string }
+  summary: SellerDashboardSummary
+  recentOrders: SellerRecentOrder[]
+  commissions: {
+    pending: number
+    approved: number
+    paid: number
+    total: number
+  }
+  goals: {
+    targetValue: number
+    salesValue: number
+    percentage: number
+  }
+  topProducts: SellerTopProduct[]
+}
+
+// ===========================================================================
+// Dashboard Admin
+// ===========================================================================
+
+export interface AdminTeamPerformanceItem {
+  seller: string
+  name: string
+  email: string
+  salesValue: number
+  ordersCount: number
+  target: number
+  percentage: number
+  pendingCommission: number
+  reachedGoal: boolean
+}
+
+export interface AdminTeamPerformance {
+  reference_month: string
+  ranking: AdminTeamPerformanceItem[]
+  pending_commissions_count: number
+  pending_commissions_value: number
+  goals_reached: number
+  total_sellers: number
+}
+
+export interface AdminCategoryBelow {
+  category: string
+  targetValue: number
+  salesValue: number
+  percentage: number
+  remaining: number
+}
+
+export interface AdminCategoriesBelow {
+  month: number
+  year: number
+  categories_below: AdminCategoryBelow[]
+  count: number
 }

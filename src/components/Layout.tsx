@@ -27,6 +27,7 @@ import {
   Calendar,
   CheckCircle2,
 } from 'lucide-react'
+import { NotificationCenter } from '@/components/notifications/NotificationCenter'
 import { QuickCustomerModal } from '@/components/QuickCustomerModal'
 import { customerService, dealService, companyService, reminderService } from '@/services/crm'
 import type { Customer, Deal, CompanySettings, Reminder } from '@/types/crm'
@@ -36,6 +37,7 @@ import { useRealtime } from '@/hooks/use-realtime'
 
 export default function Layout() {
   const { user, logout, isLoading, isManager, isAdmin } = useAuth()
+  const isSeller = !isManager // vendedor: role === 'vendedor'
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -146,6 +148,13 @@ export default function Layout() {
     }
   }, [user, isLoading, location, navigate])
 
+  // Redireciona vendedor do dashboard geral para seu dashboard exclusivo
+  useEffect(() => {
+    if (!isLoading && user && isSeller && location.pathname === '/') {
+      navigate('/meu-dashboard', { replace: true })
+    }
+  }, [user, isLoading, isSeller, location.pathname, navigate])
+
   // Splash Screen while verifying session
   if (isLoading) {
     return (
@@ -163,18 +172,33 @@ export default function Layout() {
     return null
   }
 
-  const navItems = [
-    { label: 'Dashboard', path: '/', icon: LayoutGrid },
-    { label: 'Pipeline', path: '/pipeline', icon: Columns3 },
-    { label: 'Funil', path: '/pipeline-funil', icon: Filter },
-    { label: 'Clientes', path: '/clientes', icon: Store },
-    { label: 'Produtos', path: '/produtos', icon: Package },
-    { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
-    { label: 'Relatórios', path: '/relatorios', icon: BarChart3 },
-    { label: 'Metas', path: '/metas', icon: Target },
-    { label: 'Comissões', path: '/comissoes', icon: Percent },
-    ...(isManager ? [{ label: 'Equipe', path: '/equipe', icon: Users }] : []),
-  ]
+  // Menu lateral adaptado por role:
+  //  - Vendedor: vê Meu Dashboard, Pipeline, Clientes, Vendas, Produtos, Comissões (apenas as suas)
+  //  - Admin/Gerente: vê Dashboard geral, Pipeline, Funil, Clientes, Produtos, Vendas,
+  //    Relatórios, Metas, Metas por Categoria, Comissões e Equipe
+  const navItems = isSeller
+    ? [
+        { label: 'Meu Dashboard', path: '/meu-dashboard', icon: LayoutGrid },
+        { label: 'Pipeline', path: '/pipeline', icon: Columns3 },
+        { label: 'Clientes', path: '/clientes', icon: Store },
+        { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
+        { label: 'Produtos', path: '/produtos', icon: Package },
+        { label: 'Comissões', path: '/comissoes', icon: Percent },
+      ]
+    : [
+        { label: 'Dashboard', path: '/', icon: LayoutGrid },
+        { label: 'Pipeline', path: '/pipeline', icon: Columns3 },
+        { label: 'Funil', path: '/pipeline-funil', icon: Filter },
+        { label: 'Clientes', path: '/clientes', icon: Store },
+        { label: 'Produtos', path: '/produtos', icon: Package },
+        { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
+        { label: 'Relatórios', path: '/relatorios', icon: BarChart3 },
+        { label: 'Metas', path: '/metas', icon: Target },
+        { label: 'Metas por Categoria', path: '/metas/categorias', icon: Target },
+        { label: 'Comissões', path: '/comissoes', icon: Percent },
+        { label: 'Notificações', path: '/notificacoes', icon: Bell },
+        ...(isManager ? [{ label: 'Equipe', path: '/equipe', icon: Users }] : []),
+      ]
 
   const userInitials = (user.name || user.email || 'U')
     .split(' ')
@@ -477,6 +501,9 @@ export default function Layout() {
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Novo Cliente</span>
             </button>
+
+            {/* Notifications Center */}
+            <NotificationCenter />
 
             {/* Reminders Bell */}
             <div ref={remindersRef} className="relative">

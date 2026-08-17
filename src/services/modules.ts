@@ -10,6 +10,18 @@ import type {
   FunnelData,
   ClientImportResult,
   ClientImportRow,
+  AppNotification,
+  UnreadCount,
+  CategoryGoal,
+  CategoryGoalPerformance,
+  CategoryGoalInput,
+  SellerDashboard,
+  SellerRecentOrder,
+  SellerCommission,
+  SellerGoals,
+  SellerTopProduct,
+  AdminTeamPerformance,
+  AdminCategoriesBelow,
 } from '@/types/modules'
 
 // ===========================================================================
@@ -133,6 +145,142 @@ export const clientImportService = {
     return await pb.send('/backend/v1/clients/import', {
       method: 'POST',
       body: { clients },
+    })
+  },
+}
+
+// ===========================================================================
+// Notificações
+// ===========================================================================
+
+export const notificationService = {
+  /** Lista notificações do usuário autenticado (mais recentes primeiro). */
+  async list(params?: { unread?: boolean }): Promise<AppNotification[]> {
+    const query: Record<string, string> = {}
+    if (params?.unread) query.unread = '1'
+    return await pb.send('/backend/v1/notifications/list', { method: 'GET', query })
+  },
+
+  /** Contagem de notificações não lidas. */
+  async unreadCount(): Promise<UnreadCount> {
+    return await pb.send('/backend/v1/notifications/unread-count', { method: 'GET' })
+  },
+
+  /** Marca uma notificação como lida. */
+  async markRead(id: string): Promise<{ id: string; is_read: boolean }> {
+    return await pb.send(`/backend/v1/notifications/${id}/read`, { method: 'PUT' })
+  },
+
+  /** Marca todas as notificações do usuário como lidas. */
+  async markAllRead(): Promise<{ updated: number }> {
+    return await pb.send('/backend/v1/notifications/read-all', { method: 'PUT' })
+  },
+}
+
+// ===========================================================================
+// Metas por Categoria
+// ===========================================================================
+
+export const categoryGoalService = {
+  async list(month: number, year: number): Promise<CategoryGoal[]> {
+    return await pb.send('/backend/v1/category-goals/list', {
+      method: 'GET',
+      query: { month, year },
+    })
+  },
+
+  async performance(month: number, year: number): Promise<CategoryGoalPerformance[]> {
+    return await pb.send('/backend/v1/category-goals/performance', {
+      method: 'GET',
+      query: { month, year },
+    })
+  },
+
+  async create(data: CategoryGoalInput): Promise<CategoryGoal> {
+    return await pb.send('/backend/v1/category-goals/create', {
+      method: 'POST',
+      body: data,
+    })
+  },
+
+  async update(id: string, data: Partial<CategoryGoalInput>): Promise<CategoryGoal> {
+    return await pb.send(`/backend/v1/category-goals/${id}`, {
+      method: 'PUT',
+      body: data,
+    })
+  },
+
+  async remove(id: string): Promise<{ id: string; deleted: boolean }> {
+    return await pb.send(`/backend/v1/category-goals/${id}`, { method: 'DELETE' })
+  },
+}
+
+// ===========================================================================
+// Dashboard do Vendedor (isolado no backend por req.auth.id)
+// ===========================================================================
+
+export const sellerDashboardService = {
+  async get(params?: { month?: number; year?: number }): Promise<SellerDashboard> {
+    const query: Record<string, number> = {}
+    if (params?.month) query.month = params.month
+    if (params?.year) query.year = params.year
+    return await pb.send('/backend/v1/seller-dashboard', { method: 'GET', query })
+  },
+
+  async orders(params?: { month?: number; year?: number }): Promise<SellerRecentOrder[]> {
+    const query: Record<string, number> = {}
+    if (params?.month) query.month = params.month
+    if (params?.year) query.year = params.year
+    return await pb.send('/backend/v1/seller-dashboard/orders', { method: 'GET', query })
+  },
+
+  async commissions(params?: { month?: number; year?: number }): Promise<SellerCommission[]> {
+    const query: Record<string, number> = {}
+    if (params?.month) query.month = params.month
+    if (params?.year) query.year = params.year
+    return await pb.send('/backend/v1/seller-dashboard/commissions', { method: 'GET', query })
+  },
+
+  async goals(params?: { month?: number; year?: number }): Promise<SellerGoals> {
+    const query: Record<string, number> = {}
+    if (params?.month) query.month = params.month
+    if (params?.year) query.year = params.year
+    return await pb.send('/backend/v1/seller-dashboard/goals', { method: 'GET', query })
+  },
+
+  async topProducts(params?: { month?: number; year?: number }): Promise<SellerTopProduct[]> {
+    const query: Record<string, number> = {}
+    if (params?.month) query.month = params.month
+    if (params?.year) query.year = params.year
+    return await pb.send('/backend/v1/seller-dashboard/top-products', {
+      method: 'GET',
+      query,
+    })
+  },
+}
+
+// ===========================================================================
+// Dashboard Admin (ranking de vendedores + categorias abaixo da meta)
+// ===========================================================================
+
+export const adminDashboardService = {
+  async teamPerformance(params?: { month?: number; year?: number }): Promise<AdminTeamPerformance> {
+    const query: Record<string, number> = {}
+    if (params?.month) query.month = params.month
+    if (params?.year) query.year = params.year
+    return await pb.send('/backend/v1/admin-dashboard/team-performance', {
+      method: 'GET',
+      query,
+    })
+  },
+
+  async categoriesBelow(params?: { month?: number; year?: number }): Promise<AdminCategoriesBelow> {
+    const query: Record<string, number> = {}
+    if (params?.month) query.month = params.month
+    if (params?.year) query.year = params.year
+    return await pb.send('/backend/v1/admin-dashboard/categories-below', {
+      method: 'GET',
+      query,
     })
   },
 }
