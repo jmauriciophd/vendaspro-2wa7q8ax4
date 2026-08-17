@@ -20,6 +20,7 @@ import SalesFunnel from './pages/SalesFunnel'
 import Notificacoes from './pages/Notificacoes'
 import CategoryGoals from './pages/CategoryGoals'
 import SellerDashboard from './pages/SellerDashboard'
+import PerformanceReport from './pages/PerformanceReport'
 import NotFound from './pages/NotFound'
 import { useAuth } from '@/context/AuthContext'
 
@@ -67,6 +68,7 @@ const App = () => (
               }
             />
             <Route path="/relatorios" element={<Relatorios />} />
+            <Route path="/relatorios/desempenho" element={<PerformanceReport />} />
             <Route path="/metas" element={<Metas />} />
             <Route path="/metas/categorias" element={<CategoryGoals />} />
             <Route path="/comissoes" element={<Commissions />} />

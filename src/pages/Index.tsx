@@ -408,6 +408,7 @@ export default function Index() {
         onCommissions={() => navigate('/comissoes')}
         onImportClients={() => setImportClientsOpen(true)}
         onFunnel={() => navigate('/pipeline-funil')}
+        onPerformance={() => navigate('/relatorios/desempenho')}
       />
 
       {/* Top Vendedores + Comissões Pendentes (admin/gerente) */}
@@ -861,10 +862,12 @@ function QuickAccessSection({
   onCommissions,
   onImportClients,
   onFunnel,
+  onPerformance,
 }: {
   onCommissions: () => void
   onImportClients: () => void
   onFunnel: () => void
+  onPerformance: () => void
 }) {
   const shortcuts = [
     {
@@ -874,6 +877,14 @@ function QuickAccessSection({
       color: 'bg-indigo-50 text-indigo-700 border-indigo-100',
       hover: 'hover:border-indigo-300 hover:shadow-md',
       onClick: onCommissions,
+    },
+    {
+      label: 'Desempenho',
+      description: 'Compare o desempenho dos vendedores no período',
+      icon: TrendingUp,
+      color: 'bg-sky-50 text-sky-700 border-sky-100',
+      hover: 'hover:border-sky-300 hover:shadow-md',
+      onClick: onPerformance,
     },
     {
       label: 'Importar Clientes',
@@ -907,7 +918,7 @@ function QuickAccessSection({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {shortcuts.map((s) => (
           <button
             key={s.label}

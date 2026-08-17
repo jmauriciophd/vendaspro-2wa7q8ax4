@@ -22,6 +22,7 @@ import type {
   SellerTopProduct,
   AdminTeamPerformance,
   AdminCategoriesBelow,
+  SellerPerformanceReport,
 } from '@/types/modules'
 
 // ===========================================================================
@@ -282,5 +283,19 @@ export const adminDashboardService = {
       method: 'GET',
       query,
     })
+  },
+}
+
+// ===========================================================================
+// Relatório de Desempenho por Vendedor
+// ===========================================================================
+
+export const sellerPerformanceService = {
+  /** Relatório de desempenho comparando vendedores no período (mês/ano). */
+  async report(params?: { month?: number; year?: number }): Promise<SellerPerformanceReport> {
+    const query: Record<string, number> = {}
+    if (params?.month) query.month = params.month
+    if (params?.year) query.year = params.year
+    return await pb.send('/backend/v1/reports/seller-performance', { method: 'GET', query })
   },
 }

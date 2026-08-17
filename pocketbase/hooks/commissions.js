@@ -466,6 +466,103 @@ routerAdd(
       }
     })
 
+    // --- Envio de email ao aprovar/pagar comissão (após a transação) ---
+    // Se o envio falhar, NÃO interrompe o fluxo — apenas loga o erro.
+    // A transação da comissão + notificação in-app já foi commitada acima.
+    if (newStatus === 'approved' || newStatus === 'paid') {
+      try {
+        // Busca o email do vendedor na collection users
+        let sellerEmail = ''
+        let sellerName = 'Vendedor'
+        try {
+          const sellerRec = $app.findRecordById('users', sellerId)
+          sellerEmail = sellerRec.get('email') || ''
+          sellerName = sellerRec.get('name') || sellerEmail || 'Vendedor'
+        } catch (_) {}
+
+        if (sellerEmail) {
+          const refMonth = rec.get('reference_month') || ''
+          const valorStr = 'R$ ' + commissionValue.toFixed(2).replace('.', ',')
+          const statusWord = newStatus === 'paid' ? 'paga' : 'aprovada'
+          const subject = 'VendasPro - Comissão ' + statusWord
+
+          let siteUrl = $os.getenv('SITE_URL') || ''
+          while (siteUrl.length > 0 && siteUrl.charAt(siteUrl.length - 1) === '/') {
+            siteUrl = siteUrl.substring(0, siteUrl.length - 1)
+          }
+          const linkComissoes = siteUrl ? siteUrl + '/comissoes' : '/comissoes'
+
+          const htmlBody =
+            '<div style="font-family: Arial, Helvetica, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1e293b;">' +
+            '<h2 style="color: #4f46e5; margin: 0 0 16px 0;">VendasPro — Comissão ' +
+            statusWord +
+            '</h2>' +
+            '<p style="margin: 0 0 12px 0;">Olá, <strong>' +
+            sellerName +
+            '</strong>!</p>' +
+            '<p style="margin: 0 0 12px 0;">Sua comissão foi <strong>' +
+            statusWord +
+            '</strong> no VendasPro.</p>' +
+            '<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">' +
+            '<tr><td style="padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; font-weight: 600;">Valor da comissão</td><td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' +
+            valorStr +
+            '</td></tr>' +
+            '<tr><td style="padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; font-weight: 600;">Mês de referência</td><td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' +
+            refMonth +
+            '</td></tr>' +
+            (customerName
+              ? '<tr><td style="padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; font-weight: 600;">Cliente</td><td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' +
+                customerName +
+                '</td></tr>'
+              : '') +
+            '</table>' +
+            '<p style="margin: 16px 0 8px 0;">Acesse o sistema para mais detalhes:</p>' +
+            '<p style="margin: 0;"><a href="' +
+            linkComissoes +
+            '" style="display: inline-block; padding: 10px 18px; background: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600;">Ver minhas comissões</a></p>' +
+            '<hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;" />' +
+            '<p style="margin: 0; font-size: 12px; color: #94a3b8;">Este é um email automático do VendasPro. Não responda.</p>' +
+            '</div>'
+
+          // Configura SMTP a partir das variáveis de ambiente
+          const host = $os.getenv('SMTP_HOST') || ''
+          const port = parseInt($os.getenv('SMTP_PORT') || '587', 10)
+          const user = $os.getenv('SMTP_USER') || ''
+          const pass = $os.getenv('SMTP_PASSWORD') || ''
+          const fromAddr = $os.getenv('SMTP_FROM') || user || 'noreply@vendaspro.com'
+
+          if (host) {
+            const settings = $app.settings()
+            settings.smtp.host = host
+            settings.smtp.port = port
+            settings.smtp.username = user
+            settings.smtp.password = pass
+            settings.smtp.enabled = true
+          }
+
+          const message = new MailerMessage({
+            from: {
+              address: fromAddr,
+              name: 'VendasPro',
+            },
+            to: [{ address: sellerEmail }],
+            subject: subject,
+            html: htmlBody,
+          })
+
+          $app.newMailClient().send(message)
+        }
+      } catch (emailErr) {
+        // Email falhou — não interrompe o fluxo, apenas loga.
+        console.log(
+          'Falha ao enviar email de comissão (' +
+            newStatus +
+            '): ' +
+            ((emailErr && emailErr.message) || emailErr),
+        )
+      }
+    }
+
     return e.json(200, {
       id: rec.id,
       status: newStatus,

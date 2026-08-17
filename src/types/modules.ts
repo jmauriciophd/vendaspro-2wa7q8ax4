@@ -344,3 +344,48 @@ export interface AdminCategoriesBelow {
   categories_below: AdminCategoryBelow[]
   count: number
 }
+
+// ===========================================================================
+// Relatório de Desempenho por Vendedor
+// ===========================================================================
+
+export interface SellerPerformanceItem {
+  seller: string
+  name: string
+  email: string
+  role: string
+  active: boolean
+  salesValue: number
+  ordersCount: number
+  avgTicket: number
+  commissionTotal: number
+  goalPercentage: number
+  goalTarget: number
+  previousSalesValue: number
+  variationPercent: number
+  variationValue: number
+  rank: number
+}
+
+export interface SellerPerformanceSummary {
+  totalSales: number
+  totalCommissions: number
+  avgGoalPct: number
+  bestSeller: string
+  bestSellerValue: number
+  totalOrders: number
+  sellersCount: number
+}
+
+export interface SellerPerformanceReport {
+  period: string
+  previousPeriod: string
+  ranking: SellerPerformanceItem[]
+  summary: SellerPerformanceSummary
+}
+
+/** Item de evolução mensal de um vendedor (últimos 6 meses). */
+export interface SellerMonthlyEvolution {
+  period: string
+  value: number
+}
