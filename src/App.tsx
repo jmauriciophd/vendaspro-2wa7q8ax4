@@ -14,6 +14,7 @@ import Produtos from './pages/Produtos'
 import ProdutoDetalhe from './pages/ProdutoDetalhe'
 import Equipe from './pages/Equipe'
 import Relatorios from './pages/Relatorios'
+import Metas from './pages/Metas'
 import NotFound from './pages/NotFound'
 import { useAuth } from '@/context/AuthContext'
 
@@ -60,6 +61,7 @@ const App = () => (
               }
             />
             <Route path="/relatorios" element={<Relatorios />} />
+            <Route path="/metas" element={<Metas />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

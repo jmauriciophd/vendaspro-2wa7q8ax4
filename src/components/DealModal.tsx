@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import type { Deal, Customer, User, DealStage } from '@/types/crm'
 import { dealService } from '@/services/crm'
+import { ReminderModal } from '@/components/ReminderModal'
 import { toast } from 'sonner'
 import {
   X,
@@ -11,6 +12,7 @@ import {
   User as UserIcon,
   FileText,
   CheckCircle,
+  Bell,
 } from 'lucide-react'
 
 interface DealModalProps {
@@ -47,6 +49,7 @@ export const DealModal: React.FC<DealModalProps> = ({
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showReminderModal, setShowReminderModal] = useState(false)
 
   if (!isOpen) return null
 
@@ -257,15 +260,25 @@ export const DealModal: React.FC<DealModalProps> = ({
           {/* Action buttons */}
           <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
             {dealToEdit ? (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Excluir</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowReminderModal(true)}
+                  className="px-3 py-2 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Bell className="w-4 h-4" />
+                  <span>Criar Lembrete</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Excluir</span>
+                </button>
+              </div>
             ) : (
               <div />
             )}
@@ -296,6 +309,19 @@ export const DealModal: React.FC<DealModalProps> = ({
           </div>
         </form>
       </div>
+
+      {dealToEdit && (
+        <ReminderModal
+          isOpen={showReminderModal}
+          onClose={() => setShowReminderModal(false)}
+          dealId={dealToEdit.id}
+          dealTitle={dealToEdit.title}
+          userId={currentUserId}
+          onSaved={() => {
+            toast.success('Lembrete adicionado a este negócio.')
+          }}
+        />
+      )}
     </div>
   )
 }

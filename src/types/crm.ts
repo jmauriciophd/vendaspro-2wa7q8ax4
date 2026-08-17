@@ -153,3 +153,32 @@ export interface EmailLog extends RecordModel {
     sent_by?: User
   }
 }
+
+export interface SalesTarget extends RecordModel {
+  id: string
+  user: string
+  month: string // YYYY-MM
+  target: number
+  created: string
+  updated: string
+  expand?: {
+    user?: User
+  }
+}
+
+export type ReminderStatus = 'pending' | 'done'
+
+export interface Reminder extends RecordModel {
+  id: string
+  deal: string
+  user: string
+  message: string
+  due_date?: string
+  status?: ReminderStatus
+  created: string
+  updated: string
+  expand?: {
+    deal?: Deal
+    user?: User
+  }
+}

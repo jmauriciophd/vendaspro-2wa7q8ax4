@@ -12,13 +12,25 @@ import {
   Clock,
   CheckCircle2,
   MoreVertical,
+  AlertTriangle,
 } from 'lucide-react'
 import { dealService, customerService, userService } from '@/services/crm'
 import type { Deal, Customer, User, DealStage } from '@/types/crm'
 import { DealModal } from '@/components/DealModal'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useAuth } from '@/context/AuthContext'
 import { useRealtime } from '@/hooks/use-realtime'
 import { toast } from 'sonner'
+
+/** Dias que um negócio pode ficar parado no mesmo estágio antes de alertar. */
+const STALE_STAGE_DAYS = 7
+
+/** Retorna quantos dias o negócio está no estágio atual (baseado no `updated`). */
+function daysInStage(deal: Deal): number {
+  const ref = new Date(deal.updated || deal.created)
+  const diff = Date.now() - ref.getTime()
+  return Math.floor(diff / (1000 * 60 * 60 * 24))
+}
 
 interface StageColumn {
   id: DealStage
@@ -336,6 +348,11 @@ export default function Pipeline() {
                       closeDate < new Date() &&
                       deal.stage !== 'fechado' &&
                       deal.stage !== 'perdido'
+                    const staleDays = daysInStage(deal)
+                    const isStale =
+                      deal.stage !== 'fechado' &&
+                      deal.stage !== 'perdido' &&
+                      staleDays >= STALE_STAGE_DAYS
 
                     return (
                       <div
@@ -356,6 +373,21 @@ export default function Pipeline() {
                             <Store className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                             {deal.expand?.customer?.name || 'Mercadinho'}
                           </span>
+                          {isStale && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 border border-amber-200 text-amber-600 cursor-help">
+                                  <AlertTriangle className="w-3 h-3" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent
+                                side="top"
+                                className="text-xs bg-amber-600 text-white border-amber-700 max-w-[220px]"
+                              >
+                                Negócio parado há {staleDays} dias no mesmo estágio
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
                         </div>
 
                         {/* Title */}

@@ -9,6 +9,9 @@ import type {
   CompanySettings,
   EmailLog,
   EmailDocType,
+  SalesTarget,
+  Reminder,
+  ReminderStatus,
 } from '@/types/crm'
 
 export const customerService = {
@@ -398,5 +401,89 @@ export const emailLogService = {
       const msg = err?.response?.message || err?.message || 'Falha ao enviar email.'
       return { status: 'failed', message: msg, error: msg }
     }
+  },
+}
+
+export const salesTargetService = {
+  /** Retorna todas as metas de um mês (YYYY-MM). */
+  async getByMonth(month: string) {
+    return await pb.collection('sales_targets').getFullList<SalesTarget>({
+      filter: `month = "${month}"`,
+      expand: 'user',
+      sort: 'user',
+    })
+  },
+
+  /** Busca a meta de um vendedor para um mês específico (ou null). */
+  async getForUser(user: string, month: string) {
+    const list = await pb.collection('sales_targets').getFullList<SalesTarget>({
+      filter: `user = "${user}" && month = "${month}"`,
+      expand: 'user',
+    })
+    return list[0] || null
+  },
+
+  async create(data: { user: string; month: string; target: number }) {
+    return await pb.collection('sales_targets').create<SalesTarget>(data, {
+      expand: 'user',
+    })
+  },
+
+  async update(id: string, data: Partial<{ target: number }>) {
+    return await pb.collection('sales_targets').update<SalesTarget>(id, data, {
+      expand: 'user',
+    })
+  },
+
+  /** Cria ou atualiza a meta (upsert) de um vendedor para o mês. */
+  async upsert(data: { user: string; month: string; target: number }) {
+    const existing = await this.getForUser(data.user, data.month)
+    if (existing) {
+      return await this.update(existing.id, { target: data.target })
+    }
+    return await this.create(data)
+  },
+
+  async delete(id: string) {
+    return await pb.collection('sales_targets').delete(id)
+  },
+}
+
+export const reminderService = {
+  /** Lembretes pendentes de um usuário, ordenados por vencimento. */
+  async getPending(userId: string) {
+    return await pb.collection('reminders').getFullList<Reminder>({
+      filter: `user = "${userId}" && status = "pending"`,
+      sort: 'due_date,created',
+      expand: 'deal,deal.customer',
+    })
+  },
+
+  async getAll(userId: string) {
+    return await pb.collection('reminders').getFullList<Reminder>({
+      filter: `user = "${userId}"`,
+      sort: '-due_date',
+      expand: 'deal,deal.customer',
+    })
+  },
+
+  async create(data: { deal: string; user: string; message: string; due_date?: string }) {
+    return await pb.collection('reminders').create<Reminder>(
+      {
+        ...data,
+        status: 'pending' as ReminderStatus,
+      },
+      { expand: 'deal,deal.customer' },
+    )
+  },
+
+  async markDone(id: string) {
+    return await pb
+      .collection('reminders')
+      .update<Reminder>(id, { status: 'done' }, { expand: 'deal,deal.customer' })
+  },
+
+  async delete(id: string) {
+    return await pb.collection('reminders').delete(id)
   },
 }

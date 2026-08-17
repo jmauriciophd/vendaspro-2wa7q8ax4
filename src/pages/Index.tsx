@@ -30,31 +30,44 @@ import {
   BarChart,
   Bar,
 } from 'recharts'
-import { customerService, dealService, saleService, userService } from '@/services/crm'
-import type { Customer, Deal, Sale, User } from '@/types/crm'
+import {
+  customerService,
+  dealService,
+  saleService,
+  userService,
+  reminderService,
+} from '@/services/crm'
+import type { Customer, Deal, Sale, User, Reminder } from '@/types/crm'
+import { useAuth } from '@/context/AuthContext'
 import { useRealtime } from '@/hooks/use-realtime'
+import { Bell } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function Index() {
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const [sales, setSales] = useState<Sale[]>([])
   const [deals, setDeals] = useState<Deal[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [users, setUsers] = useState<User[]>([])
+  const [reminders, setReminders] = useState<Reminder[]>([])
   const [loading, setLoading] = useState(true)
 
   const loadData = async () => {
     try {
-      const [salesData, dealsData, customersData, usersData] = await Promise.all([
+      const [salesData, dealsData, customersData, usersData, remindersData] = await Promise.all([
         saleService.getAll(),
         dealService.getAll(),
         customerService.getAll(),
         userService.getAll(),
+        user ? reminderService.getPending(user.id) : Promise.resolve([]),
       ])
       setSales(salesData)
       setDeals(dealsData)
       setCustomers(customersData)
       setUsers(usersData)
+      setReminders(remindersData)
     } catch (err) {
       console.error('Error loading dashboard data:', err)
     } finally {
@@ -70,6 +83,7 @@ export default function Index() {
   useRealtime<Sale>('sales', () => loadData())
   useRealtime<Deal>('deals', () => loadData())
   useRealtime<Customer>('customers', () => loadData())
+  useRealtime<Reminder>('reminders', () => loadData())
 
   // Calculations for KPIs
   const kpiData = useMemo(() => {
@@ -370,6 +384,9 @@ export default function Index() {
         </div>
       </div>
 
+      {/* Lembretes Pendentes */}
+      <RemindersSection reminders={reminders} onComplete={loadData} />
+
       {/* Main Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Chart 1: Vendas por Mês (Área Gradiente) */}
@@ -653,6 +670,109 @@ export default function Index() {
           </table>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ---------- Lembretes Pendentes section ---------- */
+
+function RemindersSection({
+  reminders,
+  onComplete,
+}: {
+  reminders: Reminder[]
+  onComplete: () => void
+}) {
+  // até 5 mais próximos do vencimento (sem vencimento por último)
+  const sorted = [...reminders].sort((a, b) => {
+    const da = a.due_date ? new Date(a.due_date).getTime() : Infinity
+    const db = b.due_date ? new Date(b.due_date).getTime() : Infinity
+    return da - db
+  })
+  const list = sorted.slice(0, 5)
+
+  const handleComplete = async (id: string) => {
+    try {
+      await reminderService.markDone(id)
+      toast.success('Lembrete concluído!')
+      onComplete()
+    } catch (e) {
+      console.error(e)
+      toast.error('Erro ao concluir lembrete')
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <Bell className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-800">Lembretes Pendentes</h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Próximos follow-ups de negócios a vencer
+            </p>
+          </div>
+        </div>
+        <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-[11px] font-bold border border-amber-100">
+          {reminders.length} pendente(s)
+        </span>
+      </div>
+
+      {list.length === 0 ? (
+        <div className="py-8 text-center">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <p className="text-xs font-semibold text-slate-700">Nenhum lembrete pendente</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Você está em dia com seus follow-ups.</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {list.map((r) => {
+            const deal = r.expand?.deal
+            const customerName = deal?.expand?.customer?.name || 'Cliente'
+            const due = r.due_date ? new Date(r.due_date) : null
+            const isOverdue = due && due < new Date()
+            return (
+              <div key={r.id} className="py-3 flex items-center gap-3 first:pt-0 last:pb-0">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-800 truncate">
+                    {deal?.title || 'Negócio'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {customerName}
+                    {r.message ? ` — ${r.message}` : ''}
+                  </p>
+                </div>
+                {due && (
+                  <span
+                    className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      isOverdue
+                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}
+                  >
+                    {due.toLocaleDateString('pt-BR')}
+                  </span>
+                )}
+                <button
+                  onClick={() => handleComplete(r.id)}
+                  title="Concluir lembrete"
+                  className="shrink-0 p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

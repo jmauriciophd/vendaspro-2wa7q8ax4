@@ -20,12 +20,17 @@ import {
   Users,
   ShieldHalf,
   Settings,
+  Target,
+  Bell,
+  Calendar,
+  CheckCircle2,
 } from 'lucide-react'
 import { QuickCustomerModal } from '@/components/QuickCustomerModal'
-import { customerService, dealService, companyService } from '@/services/crm'
-import type { Customer, Deal, CompanySettings } from '@/types/crm'
+import { customerService, dealService, companyService, reminderService } from '@/services/crm'
+import type { Customer, Deal, CompanySettings, Reminder } from '@/types/crm'
 import { CompanySettingsModal } from '@/components/CompanySettingsModal'
 import { toast } from 'sonner'
+import { useRealtime } from '@/hooks/use-realtime'
 
 export default function Layout() {
   const { user, logout, isLoading, isManager, isAdmin } = useAuth()
@@ -36,6 +41,38 @@ export default function Layout() {
   const [quickCustomerModalOpen, setQuickCustomerModalOpen] = useState(false)
   const [companySettingsOpen, setCompanySettingsOpen] = useState(false)
   const [company, setCompany] = useState<CompanySettings | null>(null)
+
+  // Reminders (bell) state
+  const [reminders, setReminders] = useState<Reminder[]>([])
+  const [showReminders, setShowReminders] = useState(false)
+  const remindersRef = useRef<HTMLDivElement>(null)
+
+  const loadReminders = async () => {
+    if (!user) return
+    try {
+      const data = await reminderService.getPending(user.id)
+      setReminders(data)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  useEffect(() => {
+    loadReminders()
+  }, [user])
+
+  useRealtime<Reminder>('reminders', () => loadReminders())
+
+  // Close reminders dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (remindersRef.current && !remindersRef.current.contains(event.target as Node)) {
+        setShowReminders(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const loadCompany = async () => {
     try {
@@ -131,6 +168,7 @@ export default function Layout() {
     { label: 'Produtos', path: '/produtos', icon: Package },
     { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
     { label: 'Relatórios', path: '/relatorios', icon: BarChart3 },
+    { label: 'Metas', path: '/metas', icon: Target },
     ...(isManager ? [{ label: 'Equipe', path: '/equipe', icon: Users }] : []),
   ]
 
@@ -435,6 +473,111 @@ export default function Layout() {
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Novo Cliente</span>
             </button>
+
+            {/* Reminders Bell */}
+            <div ref={remindersRef} className="relative">
+              <button
+                onClick={() => setShowReminders((s) => !s)}
+                title="Lembretes de follow-up"
+                className="relative w-9 h-9 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-indigo-700 hover:border-indigo-200 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <Bell className="w-4 h-4" />
+                {reminders.length > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
+                    {reminders.length > 99 ? '99+' : reminders.length}
+                  </span>
+                )}
+              </button>
+
+              {showReminders && (
+                <div className="absolute top-full right-0 mt-2 w-[340px] max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in-50 zoom-in-95 duration-150">
+                  <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-indigo-600" />
+                      <h4 className="text-xs font-bold text-slate-800">Lembretes Pendentes</h4>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-bold">
+                      {reminders.length}
+                    </span>
+                  </div>
+
+                  <div className="max-h-[360px] overflow-y-auto">
+                    {reminders.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                        <p className="text-xs font-semibold text-slate-700">Tudo em dia!</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Nenhum lembrete pendente.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100">
+                        {reminders.map((r) => {
+                          const deal = r.expand?.deal
+                          const customerName = deal?.expand?.customer?.name || 'Mercadinho'
+                          const due = r.due_date ? new Date(r.due_date) : null
+                          const isOverdue = due && due < new Date()
+                          return (
+                            <div
+                              key={r.id}
+                              className="p-3.5 hover:bg-slate-50/70 transition-colors"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-bold text-slate-800 truncate">
+                                    {deal?.title || 'Negócio'}
+                                  </p>
+                                  <p className="text-[11px] text-slate-500 truncate">
+                                    {customerName}
+                                  </p>
+                                </div>
+                                {due && (
+                                  <span
+                                    className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                      isOverdue
+                                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                    }`}
+                                  >
+                                    <Calendar className="w-3 h-3" />
+                                    {due.toLocaleDateString('pt-BR')}
+                                  </span>
+                                )}
+                              </div>
+                              {r.message && (
+                                <p className="text-[11px] text-slate-600 mt-1.5 line-clamp-2">
+                                  {r.message}
+                                </p>
+                              )}
+                              <div className="mt-2 flex justify-end">
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await reminderService.markDone(r.id)
+                                      toast.success('Lembrete concluído!')
+                                      loadReminders()
+                                    } catch (e) {
+                                      console.error(e)
+                                      toast.error('Erro ao concluir lembrete')
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Concluir
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/60 font-bold text-xs flex items-center justify-center shrink-0">
               {userInitials}
