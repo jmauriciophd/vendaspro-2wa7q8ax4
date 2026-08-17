@@ -16,10 +16,12 @@ import {
   XCircle,
   TrendingUp,
   ShoppingCart,
+  Upload,
 } from 'lucide-react'
 import { customerService } from '@/services/crm'
 import type { Customer } from '@/types/crm'
 import { CustomerModal } from '@/components/CustomerModal'
+import { ClientImportModal } from '@/components/clients/ClientImportModal'
 import { useRealtime } from '@/hooks/use-realtime'
 
 export default function Clientes() {
@@ -34,6 +36,7 @@ export default function Clientes() {
   // Modal
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const loadCustomers = async () => {
     try {
@@ -103,16 +106,26 @@ export default function Clientes() {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setCustomerToEdit(null)
-            setIsModalOpen(true)
-          }}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-semibold rounded-xl shadow-xs shadow-indigo-600/20 flex items-center gap-1.5 transition-all cursor-pointer self-start md:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Novo Mercadinho</span>
-        </button>
+        <div className="flex items-center gap-2 self-start md:self-auto">
+          <button
+            onClick={() => setImportOpen(true)}
+            className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <Upload className="w-4 h-4" />
+            <span className="hidden sm:inline">Importar Clientes</span>
+            <span className="sm:hidden">Importar</span>
+          </button>
+          <button
+            onClick={() => {
+              setCustomerToEdit(null)
+              setIsModalOpen(true)
+            }}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-semibold rounded-xl shadow-xs shadow-indigo-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Novo Mercadinho</span>
+          </button>
+        </div>
       </div>
 
       {/* Search & Filter Bar */}
@@ -277,6 +290,13 @@ export default function Clientes() {
         }}
         customerToEdit={customerToEdit}
         onSaved={loadCustomers}
+      />
+
+      {/* Import Modal */}
+      <ClientImportModal
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={loadCustomers}
       />
     </div>
   )

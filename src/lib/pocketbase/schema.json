@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-17T13:35:28.115Z",
+  "generatedAt": "2026-08-17T13:46:55.387Z",
   "collections": [
     {
       "name": "users",
@@ -790,6 +790,153 @@
         "CREATE INDEX idx_reminders_status ON reminders (status)",
         "CREATE INDEX idx_reminders_due_date ON reminders (due_date)",
         "CREATE INDEX idx_reminders_deal ON reminders (deal)"
+      ]
+    },
+    {
+      "name": "commission_rules",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "seller",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "percentage",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "minimum_sales",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "maximum_sales",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "active",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_commission_rules_seller ON commission_rules (seller)",
+        "CREATE INDEX idx_commission_rules_active ON commission_rules (active)",
+        "CREATE UNIQUE INDEX idx_commission_rules_seller_active ON commission_rules (seller) WHERE active = 1"
+      ]
+    },
+    {
+      "name": "commissions",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "seller",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "sale",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "sales"
+        },
+        {
+          "name": "sale_value",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "commission_percentage",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "commission_value",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["pending", "approved", "paid", "cancelled"]
+        },
+        {
+          "name": "reference_month",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "paid_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_commissions_sale ON commissions (sale)",
+        "CREATE INDEX idx_commissions_seller ON commissions (seller)",
+        "CREATE INDEX idx_commissions_reference_month ON commissions (reference_month)",
+        "CREATE INDEX idx_commissions_status ON commissions (status)"
       ]
     }
   ]

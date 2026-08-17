@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import {
   TrendingUp,
   DollarSign,
-  Users,
   Briefcase,
   Percent,
   ArrowUpRight,
@@ -41,7 +40,9 @@ import type { Customer, Deal, Sale, User, Reminder } from '@/types/crm'
 import { useAuth } from '@/context/AuthContext'
 import { useRealtime } from '@/hooks/use-realtime'
 import { Bell } from 'lucide-react'
+import { ClientImportModal } from '@/components/clients/ClientImportModal'
 import { toast } from 'sonner'
+import { Upload, Filter as FilterIcon } from 'lucide-react'
 
 export default function Index() {
   const navigate = useNavigate()
@@ -53,6 +54,7 @@ export default function Index() {
   const [users, setUsers] = useState<User[]>([])
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [loading, setLoading] = useState(true)
+  const [importClientsOpen, setImportClientsOpen] = useState(false)
 
   const loadData = async () => {
     try {
@@ -387,6 +389,20 @@ export default function Index() {
       {/* Lembretes Pendentes */}
       <RemindersSection reminders={reminders} onComplete={loadData} />
 
+      {/* Acesso Rápido */}
+      <QuickAccessSection
+        onCommissions={() => navigate('/comissoes')}
+        onImportClients={() => setImportClientsOpen(true)}
+        onFunnel={() => navigate('/pipeline-funil')}
+      />
+
+      {/* Modal de importação de clientes (atalho do dashboard) */}
+      <ClientImportModal
+        isOpen={importClientsOpen}
+        onClose={() => setImportClientsOpen(false)}
+        onImported={loadData}
+      />
+
       {/* Main Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Chart 1: Vendas por Mês (Área Gradiente) */}
@@ -669,6 +685,82 @@ export default function Index() {
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Acesso Rápido (atalhos para os novos módulos) ---------- */
+
+function QuickAccessSection({
+  onCommissions,
+  onImportClients,
+  onFunnel,
+}: {
+  onCommissions: () => void
+  onImportClients: () => void
+  onFunnel: () => void
+}) {
+  const shortcuts = [
+    {
+      label: 'Comissões',
+      description: 'Calcule e acompanhe comissões da equipe',
+      icon: Percent,
+      color: 'bg-indigo-50 text-indigo-700 border-indigo-100',
+      hover: 'hover:border-indigo-300 hover:shadow-md',
+      onClick: onCommissions,
+    },
+    {
+      label: 'Importar Clientes',
+      description: 'Cadastre mercadinhos em lote via CSV',
+      icon: Upload,
+      color: 'bg-violet-50 text-violet-700 border-violet-100',
+      hover: 'hover:border-violet-300 hover:shadow-md',
+      onClick: onImportClients,
+    },
+    {
+      label: 'Funil de Vendas',
+      description: 'Visualize a conversão entre estágios',
+      icon: FilterIcon,
+      color: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+      hover: 'hover:border-emerald-300 hover:shadow-md',
+      onClick: onFunnel,
+    },
+  ]
+
+  return (
+    <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-800">Acesso Rápido</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Atalhos para os módulos do CRM</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {shortcuts.map((s) => (
+          <button
+            key={s.label}
+            onClick={s.onClick}
+            className={`group flex items-center gap-3 p-4 rounded-xl border ${s.color} ${s.hover} transition-all text-left cursor-pointer`}
+          >
+            <div className="w-10 h-10 rounded-xl bg-white/70 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <s.icon className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-slate-800 truncate">{s.label}</p>
+              <p className="text-[11px] text-slate-500 leading-tight mt-0.5 line-clamp-2">
+                {s.description}
+              </p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform shrink-0 ml-auto" />
+          </button>
+        ))}
       </div>
     </div>
   )

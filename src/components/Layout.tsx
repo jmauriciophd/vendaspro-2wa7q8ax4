@@ -21,6 +21,8 @@ import {
   ShieldHalf,
   Settings,
   Target,
+  Percent,
+  Filter,
   Bell,
   Calendar,
   CheckCircle2,
@@ -164,11 +166,13 @@ export default function Layout() {
   const navItems = [
     { label: 'Dashboard', path: '/', icon: LayoutGrid },
     { label: 'Pipeline', path: '/pipeline', icon: Columns3 },
+    { label: 'Funil', path: '/pipeline-funil', icon: Filter },
     { label: 'Clientes', path: '/clientes', icon: Store },
     { label: 'Produtos', path: '/produtos', icon: Package },
     { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
     { label: 'Relatórios', path: '/relatorios', icon: BarChart3 },
     { label: 'Metas', path: '/metas', icon: Target },
+    { label: 'Comissões', path: '/comissoes', icon: Percent },
     ...(isManager ? [{ label: 'Equipe', path: '/equipe', icon: Users }] : []),
   ]
 

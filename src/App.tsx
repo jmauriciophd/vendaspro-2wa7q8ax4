@@ -15,6 +15,8 @@ import ProdutoDetalhe from './pages/ProdutoDetalhe'
 import Equipe from './pages/Equipe'
 import Relatorios from './pages/Relatorios'
 import Metas from './pages/Metas'
+import Commissions from './pages/Commissions'
+import SalesFunnel from './pages/SalesFunnel'
 import NotFound from './pages/NotFound'
 import { useAuth } from '@/context/AuthContext'
 
@@ -62,6 +64,8 @@ const App = () => (
             />
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/metas" element={<Metas />} />
+            <Route path="/comissoes" element={<Commissions />} />
+            <Route path="/pipeline-funil" element={<SalesFunnel />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
