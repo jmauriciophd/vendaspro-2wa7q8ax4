@@ -12,8 +12,13 @@ import {
   ChevronRight,
   RefreshCw,
   Clock,
+  CreditCard,
+  CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react'
 import { sellerDashboardService } from '@/services/modules'
+import { paymentService } from '@/services/paymentService'
+import type { SellerPaymentDashboard } from '@/types/payments'
 import { useAuth } from '@/context/AuthContext'
 import { toast } from 'sonner'
 import type {
@@ -64,6 +69,7 @@ export default function SellerDashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [data, setData] = useState<SellerDashboardData | null>(null)
+  const [payDash, setPayDash] = useState<SellerPaymentDashboard | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -78,6 +84,10 @@ export default function SellerDashboard() {
       setLoading(false)
       setRefreshing(false)
     }
+    paymentService
+      .sellerDashboard()
+      .then(setPayDash)
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -178,6 +188,90 @@ export default function SellerDashboard() {
           value={`${formatPct(goalPct)}%`}
         />
       </div>
+
+      {/* Cards de cobranças */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <SummaryCard
+          icon={<CreditCard className="w-5 h-5" />}
+          color="bg-indigo-50 text-indigo-600"
+          label="Cobranças enviadas"
+          value={String(payDash?.sent_count || 0)}
+        />
+        <SummaryCard
+          icon={<Clock className="w-5 h-5" />}
+          color="bg-amber-50 text-amber-600"
+          label="Aguardando pagamento"
+          value={String(payDash?.waiting_count || 0)}
+        />
+        <SummaryCard
+          icon={<CheckCircle2 className="w-5 h-5" />}
+          color="bg-emerald-50 text-emerald-600"
+          label="Recebidas hoje"
+          value={`R$ ${formatBRL(payDash?.received_today_value || 0)}`}
+        />
+        <SummaryCard
+          icon={<AlertTriangle className="w-5 h-5" />}
+          color="bg-rose-50 text-rose-600"
+          label="Vencidas"
+          value={String(payDash?.expired_count || 0)}
+        />
+      </div>
+
+      {/* Últimos pagamentos recebidos */}
+      {(payDash?.recent_received?.length || 0) > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              Últimos pagamentos recebidos
+            </h3>
+            <button
+              onClick={() => navigate('/financeiro/cobrancas')}
+              className="inline-flex items-center text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+            >
+              Ver todos <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50/60 text-xs text-slate-500 uppercase tracking-wider">
+                <tr>
+                  <th className="text-left font-semibold px-4 py-2.5">Cliente</th>
+                  <th className="text-left font-semibold px-4 py-2.5">Pedido</th>
+                  <th className="text-right font-semibold px-4 py-2.5">Valor</th>
+                  <th className="text-left font-semibold px-4 py-2.5">Método</th>
+                  <th className="text-right font-semibold px-4 py-2.5">Há quanto tempo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {payDash!.recent_received.map((r) => (
+                  <tr
+                    key={r.id}
+                    onClick={() => navigate(`/financeiro/cobrancas/${r.id}`)}
+                    className="hover:bg-slate-50/60 cursor-pointer"
+                  >
+                    <td className="px-4 py-2.5 text-slate-800 font-medium truncate max-w-[160px]">
+                      {r.client_name || '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600 text-xs font-mono">
+                      {r.sale_id ? '#' + r.sale_id.slice(-6).toUpperCase() : '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-bold text-emerald-600">
+                      R$ {formatBRL(r.final_amount)}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600 text-xs uppercase">
+                      {r.payment_method}
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-slate-400 text-xs">
+                      {r.paid_at ? new Date(r.paid_at).toLocaleDateString('pt-BR') : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Coluna principal (2/3) */}

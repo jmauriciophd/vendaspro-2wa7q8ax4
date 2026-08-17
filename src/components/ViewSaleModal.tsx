@@ -28,7 +28,9 @@ import {
   generateAccessKey,
   type PromissoriaInstallment,
 } from '@/lib/documents'
+import { GenerateChargeModal } from '@/components/payments/GenerateChargeModal'
 import { toast } from 'sonner'
+import { useNavigate } from 'react-router-dom'
 
 interface ViewSaleModalProps {
   isOpen: boolean
@@ -48,6 +50,7 @@ type DocTab = 'nfe' | 'promissoria'
 
 export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, saleId }) => {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [sale, setSale] = useState<Sale | null>(null)
   const [items, setItems] = useState<SaleItem[]>([])
   const [company, setCompany] = useState<CompanySettings | null>(null)
@@ -56,6 +59,7 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
 
   // Active sub-modal
   const [activeModal, setActiveModal] = useState<null | 'doc' | 'email' | 'logs'>(null)
+  const [chargeModalOpen, setChargeModalOpen] = useState(false)
   const [docTab, setDocTab] = useState<DocTab>('nfe')
 
   // Promissoria form state
@@ -426,6 +430,13 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                   Documentos Fiscais & Envio
                 </p>
                 <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setChargeModalOpen(true)}
+                    className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span>Gerar pagamento</span>
+                  </button>
                   <button
                     onClick={() => {
                       setDocTab('nfe')
@@ -843,6 +854,17 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
           </div>
         </div>
       )}
+
+      {/* ---- Gerar Cobrança ---- */}
+      <GenerateChargeModal
+        isOpen={chargeModalOpen}
+        onClose={() => setChargeModalOpen(false)}
+        sale={sale}
+        onGenerated={(chargeId) => {
+          setChargeModalOpen(false)
+          navigate(`/financeiro/cobrancas/${chargeId}`)
+        }}
+      />
     </div>
   )
 }

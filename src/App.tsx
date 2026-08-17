@@ -21,6 +21,10 @@ import Notificacoes from './pages/Notificacoes'
 import CategoryGoals from './pages/CategoryGoals'
 import SellerDashboard from './pages/SellerDashboard'
 import PerformanceReport from './pages/PerformanceReport'
+import PaymentCharges from './pages/PaymentCharges'
+import PaymentChargeDetail from './pages/PaymentChargeDetail'
+import Reconciliation from './pages/Reconciliation'
+import PaymentSettings from './pages/PaymentSettings'
 import NotFound from './pages/NotFound'
 import { useAuth } from '@/context/AuthContext'
 
@@ -74,6 +78,24 @@ const App = () => (
             <Route path="/comissoes" element={<Commissions />} />
             <Route path="/pipeline-funil" element={<SalesFunnel />} />
             <Route path="/notificacoes" element={<Notificacoes />} />
+            <Route path="/financeiro/cobrancas" element={<PaymentCharges />} />
+            <Route path="/financeiro/cobrancas/:id" element={<PaymentChargeDetail />} />
+            <Route
+              path="/financeiro/conciliacao"
+              element={
+                <GerenteRoute>
+                  <Reconciliation />
+                </GerenteRoute>
+              }
+            />
+            <Route
+              path="/configuracoes/pagamentos"
+              element={
+                <GerenteRoute>
+                  <PaymentSettings />
+                </GerenteRoute>
+              }
+            />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

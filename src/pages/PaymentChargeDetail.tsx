@@ -1,0 +1,631 @@
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import {
+  ArrowLeft,
+  CreditCard,
+  Copy,
+  Check,
+  Send,
+  Ban,
+  RefreshCw,
+  CheckCircle2,
+  Undo2,
+  User,
+  ShoppingCart,
+  DollarSign,
+  Calendar,
+  Building2,
+  Clock,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import {
+  paymentService,
+  formatMoney,
+  formatDate,
+  formatDateTime,
+  chargeStatusLabels,
+  chargeStatusBadge,
+  paymentMethodLabels,
+  paymentMethodBadge,
+} from '@/services/paymentService'
+import type { PaymentChargeDetail } from '@/types/payments'
+import { useAuth } from '@/context/AuthContext'
+import { PixDisplay } from '@/components/payments/PixDisplay'
+import { ChargeTimeline } from '@/components/payments/ChargeTimeline'
+import { SendChargeModal } from '@/components/payments/SendChargeModal'
+
+export default function PaymentChargeDetail() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const { isManager, isAdmin, user } = useAuth()
+  const [charge, setCharge] = useState<PaymentChargeDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<'details' | 'timeline'>('details')
+  const [sendOpen, setSendOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+
+  // modais auxiliares
+  const [manualOpen, setManualOpen] = useState(false)
+  const [refundOpen, setRefundOpen] = useState(false)
+
+  const load = async () => {
+    if (!id) return
+    setLoading(true)
+    try {
+      const data = await paymentService.getCharge(id)
+      setCharge(data)
+    } catch (err) {
+      console.error(err)
+      toast.error('Cobrança não encontrada.')
+      navigate('/financeiro/cobrancas')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+  }, [id])
+
+  const canCancel = charge && (charge.status === 'pending' || charge.status === 'waiting_payment')
+  const canManualConfirm =
+    isManager &&
+    charge &&
+    charge.status !== 'paid' &&
+    charge.status !== 'canceled' &&
+    charge.status !== 'refunded'
+  const canRefund =
+    isAdmin && charge && (charge.status === 'paid' || charge.status === 'partially_refunded')
+  const isOwner = user?.id === charge?.seller_id
+
+  const handleCopyLink = async () => {
+    if (!charge?.payment_url) return
+    try {
+      await navigator.clipboard.writeText(charge.payment_url)
+      setCopied(true)
+      toast.success('Link copiado!')
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error('Erro ao copiar link.')
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!charge) return
+    if (!confirm('Tem certeza que deseja cancelar esta cobrança?')) return
+    setActionLoading(true)
+    try {
+      await paymentService.cancelCharge(charge.id)
+      toast.success('Cobrança cancelada.')
+      load()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao cancelar cobrança.')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleCheckStatus = async () => {
+    if (!charge) return
+    setActionLoading(true)
+    try {
+      const res = await paymentService.checkStatus(charge.id)
+      toast.success(res.message || 'Status verificado.')
+      load()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao verificar status.')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-8 w-64 bg-slate-200 rounded-lg" />
+        <div className="h-40 bg-slate-200 rounded-2xl" />
+        <div className="h-64 bg-slate-200 rounded-2xl" />
+      </div>
+    )
+  }
+
+  if (!charge) return null
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <button
+          onClick={() => navigate('/financeiro/cobrancas')}
+          className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Voltar para cobranças
+        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setSendOpen(true)}
+            className="px-3.5 py-2 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Send className="w-3.5 h-3.5" /> Reenviar
+          </button>
+          {charge.payment_url && (
+            <button
+              onClick={handleCopyLink}
+              className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              Copiar link
+            </button>
+          )}
+          {canCancel && (
+            <button
+              onClick={handleCancel}
+              disabled={actionLoading}
+              className="px-3.5 py-2 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
+            >
+              <Ban className="w-3.5 h-3.5" /> Cancelar
+            </button>
+          )}
+          <button
+            onClick={handleCheckStatus}
+            disabled={actionLoading}
+            className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Verificar status
+          </button>
+          {canManualConfirm && (
+            <button
+              onClick={() => setManualOpen(true)}
+              className="px-3.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" /> Confirmar manualmente
+            </button>
+          )}
+          {canRefund && (
+            <button
+              onClick={() => setRefundOpen(true)}
+              className="px-3.5 py-2 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Undo2 className="w-3.5 h-3.5" /> Reembolsar
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Card superior com status grande */}
+      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+              <CreditCard className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">
+                Cobrança #{charge.external_charge_id}
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Criada em {formatDateTime(charge.created)}
+              </p>
+            </div>
+          </div>
+          <span
+            className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-bold border ${
+              chargeStatusBadge[charge.status] || 'bg-slate-50 text-slate-700 border-slate-200'
+            }`}
+          >
+            {chargeStatusLabels[charge.status] || charge.status}
+          </span>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border border-slate-200 rounded-xl overflow-hidden text-xs font-semibold w-fit">
+        <button
+          onClick={() => setTab('details')}
+          className={`px-5 py-2 transition-colors ${
+            tab === 'details'
+              ? 'bg-indigo-600 text-white'
+              : 'bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          Detalhes
+        </button>
+        <button
+          onClick={() => setTab('timeline')}
+          className={`px-5 py-2 transition-colors border-l border-slate-200 ${
+            tab === 'timeline'
+              ? 'bg-indigo-600 text-white'
+              : 'bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          Linha do Tempo
+        </button>
+      </div>
+
+      {tab === 'details' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Dados principais */}
+          <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
+            <h3 className="text-sm font-bold text-slate-800 mb-4">Dados da cobrança</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <DetailRow
+                icon={ShoppingCart}
+                label="Pedido"
+                value={charge.sale_id ? '#' + charge.sale_id.slice(-6).toUpperCase() : '—'}
+                mono
+              />
+              <DetailRow icon={User} label="Cliente" value={charge.client_name || '—'} />
+              <DetailRow
+                icon={DollarSign}
+                label="Valor original"
+                value={'R$ ' + formatMoney(charge.original_amount)}
+              />
+              <DetailRow
+                icon={DollarSign}
+                label="Desconto"
+                value={'R$ ' + formatMoney(charge.discount_amount)}
+              />
+              <DetailRow
+                icon={DollarSign}
+                label="Valor final"
+                value={'R$ ' + formatMoney(charge.final_amount)}
+                highlight
+              />
+              <DetailRow icon={Building2} label="Provedor" value={charge.provider_name || '—'} />
+              <DetailRow
+                icon={CreditCard}
+                label="Método"
+                value={paymentMethodLabels[charge.payment_method] || charge.payment_method}
+              />
+              <DetailRow icon={Calendar} label="Criado em" value={formatDateTime(charge.created)} />
+              <DetailRow icon={Calendar} label="Vencimento" value={formatDate(charge.expires_at)} />
+              <DetailRow icon={Clock} label="Pago em" value={formatDate(charge.paid_at)} />
+            </div>
+
+            {/* PIX */}
+            {charge.payment_method === 'pix' && charge.pix_code && (
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
+                  Pagamento PIX
+                </h4>
+                <PixDisplay pixCode={charge.pix_code} qrcode={charge.pix_qrcode} />
+              </div>
+            )}
+
+            {/* Link */}
+            {charge.payment_method === 'link' && charge.payment_url && (
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Link de pagamento
+                </h4>
+                <div className="flex items-stretch gap-2">
+                  <input
+                    readOnly
+                    value={charge.payment_url}
+                    className="flex-1 px-3.5 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl text-slate-600 outline-none truncate"
+                  />
+                  <button
+                    onClick={handleCopyLink}
+                    className={`shrink-0 px-3.5 py-2 text-xs font-semibold rounded-xl border transition-colors flex items-center gap-1.5 cursor-pointer ${
+                      copied
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                    }`}
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied ? 'Copiado' : 'Copiar'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* URL para outros métodos */}
+            {charge.payment_method !== 'pix' &&
+              charge.payment_method !== 'link' &&
+              charge.payment_url && (
+                <div className="mt-6 pt-6 border-t border-slate-100">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    URL de pagamento
+                  </h4>
+                  <div className="flex items-stretch gap-2">
+                    <input
+                      readOnly
+                      value={charge.payment_url}
+                      className="flex-1 px-3.5 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl text-slate-600 outline-none truncate"
+                    />
+                    <button
+                      onClick={handleCopyLink}
+                      className="shrink-0 px-3.5 py-2 text-xs font-semibold rounded-xl border bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {copied ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                      Copiar
+                    </button>
+                  </div>
+                </div>
+              )}
+          </div>
+
+          {/* Lateral */}
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
+                Resumo financeiro
+              </h4>
+              <div className="space-y-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Original</span>
+                  <span className="font-semibold text-slate-800">
+                    R$ {formatMoney(charge.original_amount)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Desconto</span>
+                  <span className="font-semibold text-rose-600">
+                    - R$ {formatMoney(charge.discount_amount)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <span className="font-semibold text-slate-700">Final</span>
+                  <span className="font-bold text-emerald-700 text-base">
+                    R$ {formatMoney(charge.final_amount)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
+                Vendedor
+              </h4>
+              <p className="text-sm font-semibold text-slate-800">{charge.seller_name || '—'}</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
+          <h3 className="text-sm font-bold text-slate-800 mb-5">Linha do Tempo</h3>
+          <ChargeTimeline entries={charge.timeline || []} />
+        </div>
+      )}
+
+      {/* Modais */}
+      <SendChargeModal
+        isOpen={sendOpen}
+        onClose={() => setSendOpen(false)}
+        charge={charge}
+        onSent={load}
+      />
+
+      {manualOpen && (
+        <ManualConfirmModal
+          chargeId={charge.id}
+          onClose={() => setManualOpen(false)}
+          onConfirmed={() => {
+            setManualOpen(false)
+            load()
+          }}
+        />
+      )}
+
+      {refundOpen && (
+        <RefundModal
+          chargeId={charge.id}
+          maxAmount={charge.final_amount}
+          onClose={() => setRefundOpen(false)}
+          onRefunded={() => {
+            setRefundOpen(false)
+            load()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function DetailRow({
+  icon: Icon,
+  label,
+  value,
+  mono,
+  highlight,
+}: {
+  icon: React.ElementType
+  label: string
+  value: string
+  mono?: boolean
+  highlight?: boolean
+}) {
+  return (
+    <div>
+      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+        <Icon className="w-3 h-3" /> {label}
+      </span>
+      <p
+        className={`text-sm font-bold mt-0.5 ${highlight ? 'text-emerald-700' : 'text-slate-800'} ${
+          mono ? 'font-mono' : ''
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  )
+}
+
+// ----- Confirmação manual -----
+function ManualConfirmModal({
+  chargeId,
+  onClose,
+  onConfirmed,
+}: {
+  chargeId: string
+  onClose: () => void
+  onConfirmed: () => void
+}) {
+  const [reason, setReason] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!reason.trim()) {
+      toast.error('Informe o motivo da confirmação manual.')
+      return
+    }
+    setLoading(true)
+    try {
+      await paymentService.manualConfirm(chargeId, reason)
+      toast.success('Pagamento confirmado manualmente.')
+      onConfirmed()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao confirmar pagamento.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md flex flex-col overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <h3 className="text-base font-bold text-slate-800">Confirmação Manual</h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 rotate-180" />
+          </button>
+        </div>
+        <div className="p-6 space-y-3">
+          <p className="text-xs text-slate-500">
+            Esta ação registrará o pagamento como confirmado. A ação fica registrada no log de
+            auditoria.
+          </p>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Motivo *</label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              placeholder="Ex: comprovante recebido fora do sistema..."
+              className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+            />
+          </div>
+        </div>
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
+          >
+            <CheckCircle2 className="w-4 h-4" /> Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ----- Reembolso -----
+function RefundModal({
+  chargeId,
+  maxAmount,
+  onClose,
+  onRefunded,
+}: {
+  chargeId: string
+  maxAmount: number
+  onClose: () => void
+  onRefunded: () => void
+}) {
+  const [amount, setAmount] = useState('')
+  const [reason, setReason] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async () => {
+    setLoading(true)
+    try {
+      const amt = amount ? Number(amount) : undefined
+      await paymentService.refund(chargeId, { amount: amt, reason })
+      toast.success('Reembolso registrado.')
+      onRefunded()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao registrar reembolso.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md flex flex-col overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <h3 className="text-base font-bold text-slate-800">Reembolso</h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 rotate-180" />
+          </button>
+        </div>
+        <div className="p-6 space-y-3">
+          <p className="text-xs text-slate-500">
+            Valor máximo: <strong>R$ {formatMoney(maxAmount)}</strong>. Deixe em branco para
+            reembolso total.
+          </p>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Valor do reembolso (opcional)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={String(maxAmount)}
+              className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Motivo</label>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Motivo do reembolso..."
+              className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+            />
+          </div>
+        </div>
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
+          >
+            <Undo2 className="w-4 h-4" /> Reembolsar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

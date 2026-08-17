@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-17T23:16:07.045Z",
+  "generatedAt": "2026-08-17T23:36:48.709Z",
   "collections": [
     {
       "name": "users",
@@ -962,7 +962,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["commission", "order", "quote", "stock", "system"]
+          "selectValues": ["commission", "order", "quote", "stock", "system", "payment"]
         },
         {
           "name": "title",
@@ -1075,6 +1075,564 @@
         "CREATE UNIQUE INDEX idx_category_goals_unique ON category_goals (category, month, year)",
         "CREATE INDEX idx_category_goals_period ON category_goals (month, year)",
         "CREATE INDEX idx_category_goals_active ON category_goals (active)"
+      ]
+    },
+    {
+      "name": "payment_providers",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "slug",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["active", "inactive", "incomplete", "error"]
+        },
+        {
+          "name": "environment",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["sandbox", "production"]
+        },
+        {
+          "name": "methods",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "api_key",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "api_secret",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "webhook_secret",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "webhook_configured",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "last_sync",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX idx_payment_providers_slug ON payment_providers (slug)"]
+    },
+    {
+      "name": "financial_accounts",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "provider_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "payment_providers"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "account_reference",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "environment",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["sandbox", "production"]
+        },
+        {
+          "name": "active",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "is_default",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_financial_accounts_provider ON financial_accounts (provider_id)"
+      ]
+    },
+    {
+      "name": "payment_charges",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "sale_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "sales"
+        },
+        {
+          "name": "invoice_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "client_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "customers"
+        },
+        {
+          "name": "seller_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "provider_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "payment_providers"
+        },
+        {
+          "name": "financial_account_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "financial_accounts"
+        },
+        {
+          "name": "external_charge_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "payment_method",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["pix", "credit_card", "debit_card", "boleto", "link"]
+        },
+        {
+          "name": "original_amount",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "discount_amount",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "final_amount",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "pending",
+            "waiting_payment",
+            "paid",
+            "expired",
+            "canceled",
+            "refunded",
+            "partially_refunded",
+            "failed",
+            "under_review",
+            "difference",
+            "partial"
+          ]
+        },
+        {
+          "name": "payment_url",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pix_code",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pix_qrcode",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "expires_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "paid_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "canceled_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "provider_response",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_payment_charges_external ON payment_charges (external_charge_id)",
+        "CREATE INDEX idx_payment_charges_sale ON payment_charges (sale_id)",
+        "CREATE INDEX idx_payment_charges_client ON payment_charges (client_id)",
+        "CREATE INDEX idx_payment_charges_seller ON payment_charges (seller_id)",
+        "CREATE INDEX idx_payment_charges_provider ON payment_charges (provider_id)",
+        "CREATE INDEX idx_payment_charges_status ON payment_charges (status)",
+        "CREATE INDEX idx_payment_charges_paid ON payment_charges (paid_at)"
+      ]
+    },
+    {
+      "name": "payment_charge_messages",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "charge_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "payment_charges"
+        },
+        {
+          "name": "channel",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["email", "whatsapp", "copy_link", "sms"]
+        },
+        {
+          "name": "destination",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sent_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "sent_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_payment_charge_messages_charge ON payment_charge_messages (charge_id)"
+      ]
+    },
+    {
+      "name": "payment_webhook_events",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "provider_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "payment_providers"
+        },
+        {
+          "name": "external_event_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "event_type",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "external_charge_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "payload",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "processed",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "processed_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_payment_webhook_unique ON payment_webhook_events (provider_id, external_event_id)",
+        "CREATE INDEX idx_payment_webhook_charge ON payment_webhook_events (external_charge_id)"
+      ]
+    },
+    {
+      "name": "payment_audit_log",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "charge_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "payment_charges"
+        },
+        {
+          "name": "action",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "charge_created",
+            "link_sent",
+            "webhook_received",
+            "status_updated",
+            "payment_confirmed",
+            "payment_divergent",
+            "charge_canceled",
+            "refund",
+            "manual_change",
+            "reconciliation"
+          ]
+        },
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "ip_address",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "reference",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "previous_data",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "new_data",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_payment_audit_charge ON payment_audit_log (charge_id)",
+        "CREATE INDEX idx_payment_audit_created ON payment_audit_log (created DESC)"
       ]
     }
   ]

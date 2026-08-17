@@ -42,6 +42,10 @@ export default function Vendas() {
   // Modals
   const [isNewSaleOpen, setIsNewSaleOpen] = useState(false)
   const [viewSaleId, setViewSaleId] = useState<string | null>(null)
+  // mapa sale_id -> { label, badge } do status da cobrança mais recente
+  const [chargeStatusBySale, setChargeStatusBySale] = useState<
+    Record<string, { label: string; badge: string }>
+  >({})
 
   const loadData = async () => {
     try {
@@ -61,6 +65,49 @@ export default function Vendas() {
       setCustomers(custData)
       setUsers(userData)
       setProducts(prodData)
+
+      // carrega status de cobranças por sale_id (não bloqueia)
+      try {
+        const charges = await paymentService.listCharges()
+        const statusLabels: Record<string, string> = {
+          pending: 'Pendente',
+          waiting_payment: 'Aguardando',
+          paid: 'Pago',
+          expired: 'Vencida',
+          canceled: 'Cancelada',
+          difference: 'Divergente',
+          under_review: 'Em análise',
+          partial: 'Parcial',
+          refunded: 'Reembolsada',
+          partially_refunded: 'Reemb. parcial',
+          failed: 'Falhou',
+        }
+        const statusBadge: Record<string, string> = {
+          pending: 'bg-slate-50 text-slate-600 border-slate-200',
+          waiting_payment: 'bg-amber-50 text-amber-700 border-amber-200',
+          paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+          expired: 'bg-rose-50 text-rose-700 border-rose-200',
+          canceled: 'bg-slate-100 text-slate-500 border-slate-200',
+          difference: 'bg-orange-50 text-orange-700 border-orange-200',
+          under_review: 'bg-sky-50 text-sky-700 border-sky-200',
+          partial: 'bg-amber-50 text-amber-700 border-amber-200',
+          refunded: 'bg-violet-50 text-violet-700 border-violet-200',
+          partially_refunded: 'bg-violet-50 text-violet-700 border-violet-200',
+          failed: 'bg-red-50 text-red-700 border-red-200',
+        }
+        const map: Record<string, { label: string; badge: string }> = {}
+        for (const c of charges) {
+          if (c.sale_id && !map[c.sale_id]) {
+            map[c.sale_id] = {
+              label: 'Cobrança: ' + (statusLabels[c.status] || c.status),
+              badge: statusBadge[c.status] || 'bg-slate-50 text-slate-600 border-slate-200',
+            }
+          }
+        }
+        setChargeStatusBySale(map)
+      } catch {
+        /* intentionally ignored */
+      }
     } catch (err) {
       console.error(err)
       toast.error('Erro ao carregar vendas')
@@ -268,6 +315,13 @@ export default function Vendas() {
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                           <Clock className="w-3 h-3" /> Pendente
+                        </span>
+                      )}
+                      {chargeStatusBySale[s.id] && (
+                        <span
+                          className={`ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${chargeStatusBySale[s.id].badge}`}
+                        >
+                          {chargeStatusBySale[s.id].label}
                         </span>
                       )}
                     </td>

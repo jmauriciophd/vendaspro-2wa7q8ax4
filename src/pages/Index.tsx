@@ -45,6 +45,14 @@ import { adminDashboardService } from '@/services/modules'
 import type { AdminTeamPerformance, AdminCategoriesBelow } from '@/types/modules'
 import { toast } from 'sonner'
 import { Upload, Filter as FilterIcon, Trophy, AlertTriangle, Target } from 'lucide-react'
+import { paymentService, formatMoney } from '@/services/paymentService'
+import type { PaymentsDashboard } from '@/types/payments'
+import {
+  DollarSign as PaymentDollar,
+  CheckCircle2 as PaymentCheck,
+  Clock as PaymentClock,
+  AlertTriangle as PaymentAlert,
+} from 'lucide-react'
 
 export default function Index() {
   const navigate = useNavigate()
@@ -60,6 +68,7 @@ export default function Index() {
   // Novas seções admin (ranking vendedores + categorias abaixo da meta)
   const [teamPerformance, setTeamPerformance] = useState<AdminTeamPerformance | null>(null)
   const [categoriesBelow, setCategoriesBelow] = useState<AdminCategoriesBelow | null>(null)
+  const [payDash, setPayDash] = useState<PaymentsDashboard | null>(null)
 
   const loadData = async () => {
     try {
@@ -70,6 +79,11 @@ export default function Index() {
         userService.getAll(),
         user ? reminderService.getPending(user.id) : Promise.resolve([]),
       ])
+      // dashboard financeiro (não bloqueia render principal)
+      paymentService
+        .dashboard()
+        .then(setPayDash)
+        .catch(() => {})
       setSales(salesData)
       setDeals(dealsData)
       setCustomers(customersData)
@@ -397,6 +411,69 @@ export default function Index() {
             <span className="font-semibold text-slate-700">Deals Fechados</span>
             <span>no ciclo comercial</span>
           </div>
+        </div>
+      </div>
+
+      {/* Resumo Financeiro (Pagamentos) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div
+          onClick={() => navigate('/financeiro/cobrancas')}
+          className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Recebimentos Hoje
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <PaymentCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-xl font-bold text-slate-900">
+            R$ {formatMoney(payDash?.received_today)}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1">
+            {payDash?.received_today_count || 0} cobrança(s) pagas hoje
+          </p>
+        </div>
+        <div
+          onClick={() => navigate('/financeiro/cobrancas')}
+          className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Cobranças Pendentes
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <PaymentClock className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-xl font-bold text-slate-900">
+            {payDash?.pending_count || 0}{' '}
+            <span className="text-sm font-normal text-slate-400">cobranças</span>
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1">
+            R$ {formatMoney(payDash?.pending_value)} em aberto
+          </p>
+        </div>
+        <div
+          onClick={() => navigate('/financeiro/cobrancas')}
+          className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Cobranças Vencidas
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <PaymentAlert className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-xl font-bold text-slate-900">
+            {payDash?.expired_count || 0}{' '}
+            <span className="text-sm font-normal text-slate-400">vencidas</span>
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1">
+            R$ {formatMoney(payDash?.expired_value)} a recuperar
+          </p>
         </div>
       </div>
 

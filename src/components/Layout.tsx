@@ -26,6 +26,8 @@ import {
   Bell,
   Calendar,
   CheckCircle2,
+  Scale,
+  CreditCard,
 } from 'lucide-react'
 import { NotificationCenter } from '@/components/notifications/NotificationCenter'
 import { QuickCustomerModal } from '@/components/QuickCustomerModal'
@@ -176,6 +178,14 @@ export default function Layout() {
   //  - Vendedor: vê Meu Dashboard, Pipeline, Clientes, Vendas, Produtos, Comissões (apenas as suas)
   //  - Admin/Gerente: vê Dashboard geral, Pipeline, Funil, Clientes, Produtos, Vendas,
   //    Relatórios, Metas, Metas por Categoria, Comissões e Equipe
+  // Grupo Financeiro: Cobranças (todos), Conciliação (admin/gerente)
+  const financialItems = isManager
+    ? [
+        { label: 'Cobranças', path: '/financeiro/cobrancas', icon: DollarSign },
+        { label: 'Conciliação', path: '/financeiro/conciliacao', icon: Scale },
+      ]
+    : [{ label: 'Cobranças', path: '/financeiro/cobrancas', icon: DollarSign }]
+
   const navItems = isSeller
     ? [
         { label: 'Meu Dashboard', path: '/meu-dashboard', icon: LayoutGrid },
@@ -184,6 +194,7 @@ export default function Layout() {
         { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
         { label: 'Produtos', path: '/produtos', icon: Package },
         { label: 'Comissões', path: '/comissoes', icon: Percent },
+        { label: 'Cobranças', path: '/financeiro/cobrancas', icon: DollarSign },
       ]
     : [
         { label: 'Dashboard', path: '/', icon: LayoutGrid },
@@ -197,8 +208,13 @@ export default function Layout() {
         { label: 'Metas', path: '/metas', icon: Target },
         { label: 'Metas por Categoria', path: '/metas/categorias', icon: Target },
         { label: 'Comissões', path: '/comissoes', icon: Percent },
+        { label: 'Cobranças', path: '/financeiro/cobrancas', icon: DollarSign },
+        { label: 'Conciliação', path: '/financeiro/conciliacao', icon: Scale },
         { label: 'Notificações', path: '/notificacoes', icon: Bell },
         ...(isManager ? [{ label: 'Equipe', path: '/equipe', icon: Users }] : []),
+        ...(isManager
+          ? [{ label: 'Pagamentos', path: '/configuracoes/pagamentos', icon: CreditCard }]
+          : []),
       ]
 
   const userInitials = (user.name || user.email || 'U')
