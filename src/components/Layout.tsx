@@ -178,14 +178,6 @@ export default function Layout() {
   //  - Vendedor: vê Meu Dashboard, Pipeline, Clientes, Vendas, Produtos, Comissões (apenas as suas)
   //  - Admin/Gerente: vê Dashboard geral, Pipeline, Funil, Clientes, Produtos, Vendas,
   //    Relatórios, Metas, Metas por Categoria, Comissões e Equipe
-  // Grupo Financeiro: Cobranças (todos), Conciliação (admin/gerente)
-  const financialItems = isManager
-    ? [
-        { label: 'Cobranças', path: '/financeiro/cobrancas', icon: DollarSign },
-        { label: 'Conciliação', path: '/financeiro/conciliacao', icon: Scale },
-      ]
-    : [{ label: 'Cobranças', path: '/financeiro/cobrancas', icon: DollarSign }]
-
   const navItems = isSeller
     ? [
         { label: 'Meu Dashboard', path: '/meu-dashboard', icon: LayoutGrid },
@@ -212,7 +204,7 @@ export default function Layout() {
         { label: 'Conciliação', path: '/financeiro/conciliacao', icon: Scale },
         { label: 'Notificações', path: '/notificacoes', icon: Bell },
         ...(isManager ? [{ label: 'Equipe', path: '/equipe', icon: Users }] : []),
-        ...(isManager
+        ...(isAdmin
           ? [{ label: 'Pagamentos', path: '/configuracoes/pagamentos', icon: CreditCard }]
           : []),
       ]

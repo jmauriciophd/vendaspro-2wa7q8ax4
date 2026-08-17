@@ -46,6 +46,24 @@ function GerenteRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { isAdmin } = useAuth()
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+          <span className="text-2xl">🔒</span>
+        </div>
+        <h2 className="text-sm font-semibold text-slate-700">Acesso restrito</h2>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm">
+          Esta área é visível apenas para administradores.
+        </p>
+      </div>
+    )
+  }
+  return <>{children}</>
+}
+
 const App = () => (
   <BrowserRouter>
     <AuthProvider>

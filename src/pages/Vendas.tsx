@@ -16,6 +16,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { saleService, customerService, userService, productService } from '@/services/crm'
+import { paymentService } from '@/services/paymentService'
 import type { Sale, Customer, User, Product } from '@/types/crm'
 import { NewSaleModal } from '@/components/NewSaleModal'
 import { ViewSaleModal } from '@/components/ViewSaleModal'
