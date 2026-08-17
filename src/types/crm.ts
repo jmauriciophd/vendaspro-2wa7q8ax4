@@ -128,11 +128,13 @@ export interface CompanySettings extends RecordModel {
   email?: string
   email_subject?: string
   email_body?: string
+  logo?: string
   created: string
   updated: string
 }
 
 export type EmailDocType = 'nfe' | 'promissoria'
+export type EmailStatus = 'sent' | 'failed'
 
 export interface EmailLog extends RecordModel {
   id: string
@@ -141,6 +143,8 @@ export interface EmailLog extends RecordModel {
   subject?: string
   body?: string
   doc_type?: EmailDocType
+  status?: EmailStatus
+  error_message?: string
   sent_by?: string
   created: string
   updated: string

@@ -325,6 +325,31 @@ export const companyService = {
     }
     return await pb.collection('company_settings').create<CompanySettings>(data)
   },
+
+  /** Salva (ou remove) o logo da empresa como upload de arquivo. */
+  async saveLogo(file: File | null): Promise<CompanySettings | null> {
+    const existing = await this.get()
+    if (!existing) return null
+    if (file) {
+      const formData = new FormData()
+      formData.append('logo', file)
+      const updated = await pb
+        .collection('company_settings')
+        .update<CompanySettings>(existing.id, formData)
+      return updated
+    }
+    // remove o logo
+    const updated = await pb
+      .collection('company_settings')
+      .update<CompanySettings>(existing.id, { logo: null })
+    return updated
+  },
+
+  /** URL absoluta do logo armazenado, ou '' se não houver. */
+  logoUrl(company: CompanySettings | null): string {
+    if (!company || !company.logo) return ''
+    return pb.files.getUrl(company, company.logo)
+  },
 }
 
 export const emailLogService = {
@@ -345,5 +370,33 @@ export const emailLogService = {
     sent_by?: string
   }) {
     return await pb.collection('email_logs').create<EmailLog>(data)
+  },
+
+  /**
+   * Envia um email REAL via SMTP através da server-side function
+   * POST /backend/v1/send-email. Registra automaticamente em email_logs.
+   */
+  async sendEmail(data: {
+    to_email: string
+    subject: string
+    body: string
+    sale?: string
+    doc_type?: EmailDocType
+    sent_by?: string
+  }): Promise<{ status: 'sent' | 'failed'; message: string; error?: string }> {
+    try {
+      const res = await pb.send('/backend/v1/send-email', {
+        method: 'POST',
+        body: data,
+      })
+      return {
+        status: res.status || 'sent',
+        message: res.message || 'Email enviado.',
+        error: res.error,
+      }
+    } catch (err: any) {
+      const msg = err?.response?.message || err?.message || 'Falha ao enviar email.'
+      return { status: 'failed', message: msg, error: msg }
+    }
   },
 }

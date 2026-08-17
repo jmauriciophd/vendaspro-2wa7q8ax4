@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import type { CompanySettings } from '@/types/crm'
 import { companyService } from '@/services/crm'
+import pb from '@/lib/pocketbase/client'
 import { toast } from 'sonner'
-import { X, Building2, CheckCircle } from 'lucide-react'
+import { X, Building2, CheckCircle, Upload, Trash2, Image as ImageIcon } from 'lucide-react'
 
 interface CompanySettingsModalProps {
   isOpen: boolean
@@ -33,6 +34,12 @@ export const CompanySettingsModal: React.FC<CompanySettingsModalProps> = ({
   const [emailBody, setEmailBody] = useState(company?.email_body || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Logo upload
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string>('')
+  const [logoRemoving, setLogoRemoving] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   React.useEffect(() => {
     if (company) {
       setName(company.name || '')
@@ -49,10 +56,35 @@ export const CompanySettingsModal: React.FC<CompanySettingsModalProps> = ({
       setEmail(company.email || '')
       setEmailSubject(company.email_subject || '')
       setEmailBody(company.email_body || '')
+      setLogoFile(null)
+      setLogoPreview(company.logo ? pb.files.getUrl(company, company.logo) : '')
+      setLogoRemoving(false)
     }
   }, [company])
 
   if (!isOpen) return null
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Formato inválido. Use PNG, JPG ou WEBP.')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 2MB.')
+      return
+    }
+    setLogoFile(file)
+    setLogoPreview(URL.createObjectURL(file))
+    setLogoRemoving(false)
+  }
+
+  const removeLogo = () => {
+    setLogoFile(null)
+    setLogoPreview('')
+    setLogoRemoving(true)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -78,6 +110,14 @@ export const CompanySettingsModal: React.FC<CompanySettingsModalProps> = ({
         email_subject: emailSubject,
         email_body: emailBody,
       })
+
+      // Upload/remove do logo
+      if (logoFile) {
+        await companyService.saveLogo(logoFile)
+      } else if (logoRemoving) {
+        await companyService.saveLogo(null)
+      }
+
       toast.success('Dados da empresa salvos!')
       onSaved()
       onClose()
@@ -111,6 +151,55 @@ export const CompanySettingsModal: React.FC<CompanySettingsModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+          {/* Logo Upload */}
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+              Logo da Empresa (NF-e / Promissória)
+            </p>
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 bg-white flex items-center justify-center overflow-hidden shrink-0">
+                {logoPreview ? (
+                  <img src={logoPreview} alt="Logo" className="w-full h-full object-contain" />
+                ) : (
+                  <ImageIcon className="w-8 h-8 text-slate-300" />
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <p className="text-[11px] text-slate-500">
+                  A logo aparece no cabeçalho da NF-e e da Nota Promissória, ao lado dos dados do
+                  emitente. PNG, JPG ou WEBP até 2MB.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{logoPreview ? 'Trocar logo' : 'Enviar logo'}</span>
+                  </button>
+                  {logoPreview && (
+                    <button
+                      type="button"
+                      onClick={removeLogo}
+                      className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remover</span>
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={handleLogoChange}
+                  className="hidden"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-slate-700 mb-1">

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import type { Sale, SaleItem, CompanySettings, EmailLog, EmailDocType } from '@/types/crm'
 import { saleService, companyService, emailLogService } from '@/services/crm'
+import pb from '@/lib/pocketbase/client'
 import { useAuth } from '@/context/AuthContext'
 import {
   X,
@@ -66,6 +67,7 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
   const [emailSubject, setEmailSubject] = useState('')
   const [emailBody, setEmailBody] = useState('')
   const [emailDocType, setEmailDocType] = useState<EmailDocType>('nfe')
+  const [sendingEmail, setSendingEmail] = useState(false)
 
   const loadSale = async () => {
     if (!saleId) return
@@ -120,6 +122,7 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
       company,
       number: buildNfeNumber(),
       accessKey: generateAccessKey(),
+      logoUrl: company.logo ? pb.files.getUrl(company, company.logo) : undefined,
     })
     printHtml(html)
   }
@@ -160,6 +163,7 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
       installments,
       number: 'NP-' + sale.id.slice(-6).toUpperCase(),
       emissionDate: new Date().toISOString(),
+      logoUrl: company.logo ? pb.files.getUrl(company, company.logo) : undefined,
     })
     printHtml(html)
   }
@@ -252,26 +256,32 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
       toast.error('Informe o email do destinatário.')
       return
     }
-    // Generate the doc for attachment (opens print dialog so user can save as PDF)
-    if (emailDocType === 'nfe') generateNfe()
-    else generatePromissoria()
-
+    setSendingEmail(true)
     try {
-      await emailLogService.create({
-        sale: sale.id,
+      const res = await emailLogService.sendEmail({
         to_email: emailTo,
-        subject: emailSubject,
+        subject: emailSubject || 'Documento da sua compra',
         body: emailBody,
+        sale: sale.id,
         doc_type: emailDocType,
         sent_by: user?.id,
       })
-      toast.success('Documento gerado e envio registrado no histórico.')
+      if (res.status === 'sent') {
+        toast.success('Email enviado com sucesso!')
+      } else {
+        toast.error(res.message || 'Falha ao enviar email.')
+      }
+      // Também abre o PDF do documento para o usuário salvar, se desejar
+      if (emailDocType === 'nfe') generateNfe()
+      else generatePromissoria()
       const logs = await emailLogService.getBySale(sale.id)
       setEmailLogs(logs)
-      setActiveModal(null)
+      if (res.status === 'sent') setActiveModal(null)
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao registrar envio.')
+      toast.error('Erro ao enviar email.')
+    } finally {
+      setSendingEmail(false)
     }
   }
 
@@ -745,10 +755,15 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
               </button>
               <button
                 onClick={sendEmail}
-                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl shadow-xs shadow-amber-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
+                disabled={sendingEmail}
+                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 active:scale-[0.98] text-white text-xs font-semibold rounded-xl shadow-xs shadow-amber-600/20 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-70"
               >
-                <Send className="w-4 h-4" />
-                <span>Gerar PDF e Registrar Envio</span>
+                {sendingEmail ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+                <span>{sendingEmail ? 'Enviando...' : 'Enviar Email'}</span>
               </button>
             </div>
           </div>
@@ -810,6 +825,15 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                           Para: {log.to_email} • {new Date(log.created).toLocaleString('pt-BR')}
                         </p>
                       </div>
+                      {log.status === 'failed' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200 shrink-0">
+                          Falhou
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                          Enviado
+                        </span>
+                      )}
                       <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
                     </div>
                   ))}

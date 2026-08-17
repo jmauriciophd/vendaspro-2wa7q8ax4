@@ -57,6 +57,14 @@ const base64Logo = (initial: string) =>
     )}</text></svg>`,
   )}`
 
+/** Monta a tag <img> do logo do emitente. Usa a logo cadastrada; se não houver,
+ *  gera um monograma com a inicial do nome da empresa. */
+function buildLogoImg(company: CompanySettings, logoUrl?: string): string {
+  const initial = (company.name || 'E')[0] || 'E'
+  const src = logoUrl ? esc(logoUrl) : base64Logo(initial)
+  return `<img src="${src}" alt="logo" style="width:52px;height:52px;border-radius:12px;object-fit:contain"/>`
+}
+
 export interface NfeData {
   sale: Sale
   items: SaleItem[]
@@ -64,10 +72,11 @@ export interface NfeData {
   company: CompanySettings
   number: string
   accessKey: string
+  logoUrl?: string
 }
 
 export function buildNfeHtml(data: NfeData): string {
-  const { sale, items, customer, company, number, accessKey } = data
+  const { sale, items, customer, company, number, accessKey, logoUrl } = data
   const subtotal = items.reduce((a, i) => a + i.quantity * i.unit_price, 0)
   const discount = 0
   const icmsBase = subtotal
@@ -94,9 +103,9 @@ export function buildNfeHtml(data: NfeData): string {
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"/><title>NF-e ${esc(number)}</title>
   <style>${docStyles}</style></head><body>
   <div class="page">
-    <div class="header">
+   <div class="header">
       <div class="brand">
-        <img src="${base64Logo((company.name || 'E')[0])}" alt="logo"/>
+        ${buildLogoImg(company, logoUrl)}
         <div>
           <div class="brand-name">${esc(company.name)}</div>
           <div class="brand-sub">CNPJ: ${esc(company.cnpj || '-')} • IE: ${esc(company.ie || '-')}</div>
@@ -183,10 +192,11 @@ export interface PromissoriaData {
   installments: PromissoriaInstallment[]
   number: string
   emissionDate: string
+  logoUrl?: string
 }
 
 export function buildPromissoriaHtml(data: PromissoriaData): string {
-  const { sale, customer, company, totalValue, installments, number, emissionDate } = data
+  const { sale, customer, company, totalValue, installments, number, emissionDate, logoUrl } = data
 
   const rows = installments
     .map(
@@ -198,9 +208,9 @@ export function buildPromissoriaHtml(data: PromissoriaData): string {
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"/><title>Nota Promissória ${esc(number)}</title>
   <style>${docStyles}</style></head><body>
   <div class="page">
-    <div class="header">
+   <div class="header">
       <div class="brand">
-        <img src="${base64Logo('P')}" alt="logo"/>
+        ${buildLogoImg(company, logoUrl)}
         <div>
           <div class="brand-name">NOTA PROMISSÓRIA</div>
           <div class="brand-sub">Nº <strong>${esc(number)}</strong> • Emissão: ${dateFmt(emissionDate)}</div>
