@@ -19,6 +19,9 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
 }) => {
   const [name, setName] = useState('')
   const [cnpj, setCnpj] = useState('')
+  const [ie, setIe] = useState('')
+  const [phoneWhatsapp, setPhoneWhatsapp] = useState('')
+  const [telegram, setTelegram] = useState('')
   const [ownerName, setOwnerName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
@@ -39,6 +42,9 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
     if (customerToEdit) {
       setName(customerToEdit.name || '')
       setCnpj(customerToEdit.cnpj || '')
+      setIe(customerToEdit.ie || '')
+      setPhoneWhatsapp(customerToEdit.phone_whatsapp || '')
+      setTelegram(customerToEdit.telegram || '')
       setOwnerName(customerToEdit.owner_name || '')
       setPhone(customerToEdit.phone || '')
       setEmail(customerToEdit.email || '')
@@ -53,6 +59,9 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
     } else {
       setName('')
       setCnpj('')
+      setIe('')
+      setPhoneWhatsapp('')
+      setTelegram('')
       setOwnerName('')
       setPhone('')
       setEmail('')
@@ -88,6 +97,9 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
       const payload: Partial<Customer> = {
         name: name.trim(),
         cnpj: cnpj.trim() || undefined,
+        ie: ie.trim() || undefined,
+        phone_whatsapp: phoneWhatsapp.trim() || undefined,
+        telegram: telegram.trim() || undefined,
         owner_name: ownerName.trim() || undefined,
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
@@ -187,12 +199,25 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">CNPJ</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">CNPJ / CPF</label>
               <input
                 type="text"
                 value={cnpj}
                 onChange={(e) => setCnpj(e.target.value)}
                 placeholder="00.000.000/0001-00"
+                className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Inscrição Estadual (IE)
+              </label>
+              <input
+                type="text"
+                value={ie}
+                onChange={(e) => setIe(e.target.value)}
+                placeholder="123.456.789.111"
                 className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
               />
             </div>
@@ -212,13 +237,39 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Telefone / WhatsApp
+                Telefone Fixo
               </label>
               <input
                 type="text"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="(11) 98765-4321"
+                placeholder="(11) 3000-0000"
+                className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                WhatsApp (com DDD)
+              </label>
+              <input
+                type="text"
+                value={phoneWhatsapp}
+                onChange={(e) => setPhoneWhatsapp(e.target.value)}
+                placeholder="5511987654321"
+                className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Telegram (username)
+              </label>
+              <input
+                type="text"
+                value={telegram}
+                onChange={(e) => setTelegram(e.target.value)}
+                placeholder="@usuario ou usuario"
                 className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
               />
             </div>

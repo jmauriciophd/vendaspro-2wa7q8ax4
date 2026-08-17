@@ -10,8 +10,30 @@ import Pipeline from './pages/Pipeline'
 import Clientes from './pages/Clientes'
 import ClienteDetalhe from './pages/ClienteDetalhe'
 import Vendas from './pages/Vendas'
+import Produtos from './pages/Produtos'
+import ProdutoDetalhe from './pages/ProdutoDetalhe'
+import Equipe from './pages/Equipe'
 import Relatorios from './pages/Relatorios'
 import NotFound from './pages/NotFound'
+import { useAuth } from '@/context/AuthContext'
+
+function GerenteRoute({ children }: { children: React.ReactNode }) {
+  const { isManager } = useAuth()
+  if (!isManager) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+          <span className="text-2xl">🔒</span>
+        </div>
+        <h2 className="text-sm font-semibold text-slate-700">Acesso restrito</h2>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm">
+          Esta área é visível apenas para administradores e gerentes.
+        </p>
+      </div>
+    )
+  }
+  return <>{children}</>
+}
 
 const App = () => (
   <BrowserRouter>
@@ -27,6 +49,16 @@ const App = () => (
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/clientes/:id" element={<ClienteDetalhe />} />
             <Route path="/vendas" element={<Vendas />} />
+            <Route path="/produtos" element={<Produtos />} />
+            <Route path="/produtos/:id" element={<ProdutoDetalhe />} />
+            <Route
+              path="/equipe"
+              element={
+                <GerenteRoute>
+                  <Equipe />
+                </GerenteRoute>
+              }
+            />
             <Route path="/relatorios" element={<Relatorios />} />
           </Route>
           <Route path="*" element={<NotFound />} />

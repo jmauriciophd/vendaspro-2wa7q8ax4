@@ -16,6 +16,8 @@ import {
   CheckCircle2,
   Clock,
   Plus,
+  MessageCircle,
+  Send,
 } from 'lucide-react'
 import { customerService, dealService, saleService, userService } from '@/services/crm'
 import type { Customer, Deal, Sale, User } from '@/types/crm'
@@ -195,7 +197,7 @@ export default function ClienteDetalhe() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end md:self-start">
+          <div className="flex flex-wrap items-center gap-2 self-end md:self-start">
             <button
               onClick={() => setIsEditCustomerOpen(true)}
               className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -212,6 +214,42 @@ export default function ClienteDetalhe() {
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Novo Negócio</span>
+            </button>
+            <button
+              onClick={() => {
+                const raw = customer.phone_whatsapp || customer.phone || ''
+                let digits = raw.replace(/\D/g, '')
+                if (digits && !digits.startsWith('55')) digits = '55' + digits
+                const msg = encodeURIComponent(
+                  `Olá ${customer.name}! Aqui é da ${'nossa empresa'}. Como podemos ajudar?`,
+                )
+                window.open(
+                  digits ? `https://wa.me/${digits}?text=${msg}` : `https://wa.me/?text=${msg}`,
+                  '_blank',
+                )
+              }}
+              title="Enviar mensagem por WhatsApp"
+              className="px-3.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              <span>WhatsApp</span>
+            </button>
+            <button
+              onClick={() => {
+                const handle = customer.telegram || ''
+                const msg = encodeURIComponent(`Olá ${customer.name}! Aqui é da nossa empresa.`)
+                window.open(
+                  handle
+                    ? `https://t.me/${handle.replace(/^@/, '')}?text=${msg}`
+                    : `https://t.me/share/url?url=${encodeURIComponent(window.location.origin)}&text=${msg}`,
+                  '_blank',
+                )
+              }}
+              title="Enviar mensagem por Telegram"
+              className="px-3.5 py-2 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Telegram</span>
             </button>
           </div>
         </div>

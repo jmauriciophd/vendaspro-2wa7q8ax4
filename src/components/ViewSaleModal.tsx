@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import type { Sale, SaleItem } from '@/types/crm'
-import { saleService } from '@/services/crm'
+import type { Sale, SaleItem, CompanySettings, EmailLog, EmailDocType } from '@/types/crm'
+import { saleService, companyService, emailLogService } from '@/services/crm'
+import { useAuth } from '@/context/AuthContext'
 import {
   X,
   CheckCircle2,
@@ -10,7 +11,23 @@ import {
   User as UserIcon,
   CreditCard,
   ShoppingBag,
+  FileText,
+  FileSignature,
+  Mail,
+  MessageCircle,
+  Send,
+  Download,
+  History,
+  ChevronRight,
 } from 'lucide-react'
+import {
+  buildNfeHtml,
+  buildPromissoriaHtml,
+  printHtml,
+  generateAccessKey,
+  type PromissoriaInstallment,
+} from '@/lib/documents'
+import { toast } from 'sonner'
 
 interface ViewSaleModalProps {
   isOpen: boolean
@@ -18,33 +35,244 @@ interface ViewSaleModalProps {
   saleId: string | null
 }
 
+const paymentMethodLabel: any = {
+  dinheiro: 'Dinheiro',
+  pix: 'PIX',
+  cartao_credito: 'Cartão de Crédito',
+  cartao_debito: 'Cartão de Débito',
+  boleto: 'Boleto Bancário',
+}
+
+type DocTab = 'nfe' | 'promissoria'
+
 export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, saleId }) => {
+  const { user } = useAuth()
   const [sale, setSale] = useState<Sale | null>(null)
   const [items, setItems] = useState<SaleItem[]>([])
+  const [company, setCompany] = useState<CompanySettings | null>(null)
+  const [emailLogs, setEmailLogs] = useState<EmailLog[]>([])
   const [loading, setLoading] = useState(false)
+
+  // Active sub-modal
+  const [activeModal, setActiveModal] = useState<null | 'doc' | 'email' | 'logs'>(null)
+  const [docTab, setDocTab] = useState<DocTab>('nfe')
+
+  // Promissoria form state
+  const [installmentCount, setInstallmentCount] = useState(1)
+  const [firstDueDate, setFirstDueDate] = useState('')
+
+  // Email form state
+  const [emailTo, setEmailTo] = useState('')
+  const [emailSubject, setEmailSubject] = useState('')
+  const [emailBody, setEmailBody] = useState('')
+  const [emailDocType, setEmailDocType] = useState<EmailDocType>('nfe')
+
+  const loadSale = async () => {
+    if (!saleId) return
+    setLoading(true)
+    try {
+      const { sale, items } = await saleService.getById(saleId)
+      setSale(sale)
+      setItems(items)
+      const comp = await companyService.get()
+      setCompany(comp)
+      const logs = await emailLogService.getBySale(saleId)
+      setEmailLogs(logs)
+      // prefill email + promissoria
+      if (sale.expand?.customer?.email) setEmailTo(sale.expand.customer.email)
+      const defaultFirst = new Date()
+      defaultFirst.setDate(defaultFirst.getDate() + 30)
+      setFirstDueDate(defaultFirst.toISOString().split('T')[0])
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (isOpen && saleId) {
-      setLoading(true)
-      saleService
-        .getById(saleId)
-        .then((res) => {
-          setSale(res.sale)
-          setItems(res.items)
-        })
-        .catch(console.error)
-        .finally(() => setLoading(false))
+      loadSale()
+      setActiveModal(null)
     }
   }, [isOpen, saleId])
 
   if (!isOpen || !saleId) return null
 
-  const paymentMethodLabel: any = {
-    dinheiro: 'Dinheiro',
-    pix: 'PIX',
-    cartao_credito: 'Cartão de Crédito',
-    cartao_debito: 'Cartão de Débito',
-    boleto: 'Boleto Bancário',
+  const customer = sale?.expand?.customer
+  const total = sale?.total || 0
+
+  // ---- Helpers ----
+  const buildNfeNumber = () => {
+    if (!sale) return '000001'
+    return String(Math.abs(sale.created.charCodeAt(0) % 9) + 1) + sale.id.slice(-5).toUpperCase()
+  }
+
+  const generateNfe = () => {
+    if (!sale || !company) {
+      toast.error('Dados da empresa não configurados.')
+      return
+    }
+    const html = buildNfeHtml({
+      sale,
+      items,
+      customer,
+      company,
+      number: buildNfeNumber(),
+      accessKey: generateAccessKey(),
+    })
+    printHtml(html)
+  }
+
+  const generateInstallments = (): PromissoriaInstallment[] => {
+    if (!sale) return []
+    const count = Math.max(1, installmentCount)
+    const per = Math.round((total / count) * 100) / 100
+    const start = firstDueDate ? new Date(firstDueDate) : new Date()
+    const arr: PromissoriaInstallment[] = []
+    for (let i = 0; i < count; i++) {
+      const d = new Date(start)
+      d.setMonth(d.getMonth() + i)
+      arr.push({
+        number: i + 1,
+        value: i === count - 1 ? Math.round((total - per * (count - 1)) * 100) / 100 : per,
+        dueDate: d.toISOString(),
+      })
+    }
+    return arr
+  }
+
+  const generatePromissoria = () => {
+    if (!sale || !company) {
+      toast.error('Dados da empresa não configurados.')
+      return
+    }
+    if (total <= 0) {
+      toast.error('Venda sem valor para gerar promissória.')
+      return
+    }
+    const installments = generateInstallments()
+    const html = buildPromissoriaHtml({
+      sale,
+      customer,
+      company,
+      totalValue: total,
+      installments,
+      number: 'NP-' + sale.id.slice(-6).toUpperCase(),
+      emissionDate: new Date().toISOString(),
+    })
+    printHtml(html)
+  }
+
+  const formatMoney = (v: number) =>
+    v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  // ---- Share links ----
+  const buildSaleSummary = () => {
+    if (!sale) return ''
+    const lines = [
+      `*Resumo da Venda*`,
+      `Cliente: ${customer?.name || '-'}`,
+      `Data: ${new Date(sale.sale_date || sale.created).toLocaleDateString('pt-BR')}`,
+      `Valor Total: R$ ${formatMoney(total)}`,
+      `Forma de Pagamento: ${paymentMethodLabel[sale.payment_method] || sale.payment_method}`,
+      `Status: ${sale.payment_status === 'pago' ? 'Pago' : 'Pendente'}`,
+      ``,
+      `Itens:`,
+      ...items.map(
+        (it) =>
+          `• ${it.expand?.product?.name || 'Produto'} - ${it.quantity}x R$ ${formatMoney(
+            it.unit_price,
+          )}`,
+      ),
+    ]
+    return lines.join('\n')
+  }
+
+  const buildPhoneDigits = (raw?: string) => {
+    if (!raw) return ''
+    return raw.replace(/\D/g, '')
+  }
+
+  const openWhatsApp = () => {
+    const raw = customer?.phone_whatsapp || customer?.phone || ''
+    let digits = buildPhoneDigits(raw)
+    if (digits && digits.length === 10) digits = '55' + digits
+    else if (digits && digits.length === 11) digits = '55' + digits
+    else if (digits && !digits.startsWith('55')) digits = '55' + digits
+    const msg = encodeURIComponent(buildSaleSummary())
+    const url = digits ? `https://wa.me/${digits}?text=${msg}` : `https://wa.me/?text=${msg}`
+    window.open(url, '_blank')
+  }
+
+  const openTelegram = () => {
+    const msg = encodeURIComponent(buildSaleSummary())
+    const handle = customer?.telegram || ''
+    const url = handle
+      ? `https://t.me/${handle.replace(/^@/, '')}?text=${msg}`
+      : `https://t.me/share/url?url=${encodeURIComponent(window.location.origin)}&text=${msg}`
+    window.open(url, '_blank')
+  }
+
+  // ---- Email ----
+  const fillEmailTemplate = (docType: EmailDocType) => {
+    if (!company) return
+    const subj = company.email_subject || 'Documento da sua compra - {empresa}'
+    const body =
+      company.email_body ||
+      'Olá {cliente},\n\nSegue em anexo o documento.\n\nTotal: R$ {total}\nData: {data}\n\n{empresa}'
+    const dataStr = new Date(sale?.sale_date || sale?.created || Date.now()).toLocaleDateString(
+      'pt-BR',
+    )
+    setEmailSubject(
+      subj
+        .replace(/{empresa}/g, company.name || '')
+        .replace(/{cliente}/g, customer?.name || '')
+        .replace(/{total}/g, formatMoney(total))
+        .replace(/{data}/g, dataStr),
+    )
+    setEmailBody(
+      body
+        .replace(/{empresa}/g, company.name || '')
+        .replace(/{cliente}/g, customer?.name || '')
+        .replace(/{total}/g, formatMoney(total))
+        .replace(/{data}/g, dataStr),
+    )
+    setEmailDocType(docType)
+    if (customer?.email) setEmailTo(customer.email)
+  }
+
+  const openEmailModal = (docType: EmailDocType) => {
+    fillEmailTemplate(docType)
+    setActiveModal('email')
+  }
+
+  const sendEmail = async () => {
+    if (!sale || !emailTo) {
+      toast.error('Informe o email do destinatário.')
+      return
+    }
+    // Generate the doc for attachment (opens print dialog so user can save as PDF)
+    if (emailDocType === 'nfe') generateNfe()
+    else generatePromissoria()
+
+    try {
+      await emailLogService.create({
+        sale: sale.id,
+        to_email: emailTo,
+        subject: emailSubject,
+        body: emailBody,
+        doc_type: emailDocType,
+        sent_by: user?.id,
+      })
+      toast.success('Documento gerado e envio registrado no histórico.')
+      const logs = await emailLogService.getBySale(sale.id)
+      setEmailLogs(logs)
+      setActiveModal(null)
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao registrar envio.')
+    }
   }
 
   return (
@@ -85,11 +313,9 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                   </span>
                   <div className="text-xs font-bold text-slate-800 mt-1 flex items-center gap-1.5">
                     <Store className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>{sale.expand?.customer?.name || 'Mercadinho'}</span>
+                    <span>{customer?.name || 'Mercadinho'}</span>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    {sale.expand?.customer?.city || ''}
-                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{customer?.city || ''}</p>
                 </div>
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
@@ -152,6 +378,12 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                           <tr key={item.id}>
                             <td className="py-2.5 px-3 font-semibold text-slate-800">
                               {item.expand?.product?.name || 'Produto'}
+                              {(item.expand?.product?.ncm || item.expand?.product?.cfop) && (
+                                <span className="block text-[10px] text-slate-400 font-mono">
+                                  NCM {item.expand.product.ncm || '-'} • CFOP{' '}
+                                  {item.expand.product.cfop || '-'}
+                                </span>
+                              )}
                             </td>
                             <td className="py-2.5 px-3 text-center text-slate-600">
                               {item.quantity} {item.expand?.product?.unit || 'un'}
@@ -177,6 +409,63 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                   {sale.notes}
                 </div>
               )}
+
+              {/* Action Buttons - Documents & Sharing */}
+              <div className="space-y-2.5 pt-2">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Documentos Fiscais & Envio
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      setDocTab('nfe')
+                      setActiveModal('doc')
+                    }}
+                    className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>Emitir NF-e</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDocTab('promissoria')
+                      setActiveModal('doc')
+                    }}
+                    className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <FileSignature className="w-4 h-4" />
+                    <span>Nota Promissória</span>
+                  </button>
+                  <button
+                    onClick={openWhatsApp}
+                    className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>WhatsApp</span>
+                  </button>
+                  <button
+                    onClick={openTelegram}
+                    className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>Telegram</span>
+                  </button>
+                  <button
+                    onClick={() => openEmailModal('nfe')}
+                    className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Mail className="w-4 h-4" />
+                    <span>Enviar por Email</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveModal('logs')}
+                    className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <History className="w-4 h-4" />
+                    <span>Histórico ({emailLogs.length})</span>
+                  </button>
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -193,6 +482,343 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
           </div>
         )}
       </div>
+
+      {/* ---- Document Modal (NF-e / Promissória) ---- */}
+      {activeModal === 'doc' && sale && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                  {docTab === 'nfe' ? (
+                    <FileText className="w-5 h-5" />
+                  ) : (
+                    <FileSignature className="w-5 h-5" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">
+                    {docTab === 'nfe' ? 'Emitir NF-e' : 'Gerar Nota Promissória'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Venda {sale.id.slice(-6).toUpperCase()} • R${' '}
+                    {(sale.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* Doc type tabs */}
+              <div className="flex border border-slate-200 rounded-xl overflow-hidden text-xs font-semibold">
+                <button
+                  onClick={() => setDocTab('nfe')}
+                  className={`flex-1 py-2 flex items-center justify-center gap-1.5 transition-colors ${
+                    docTab === 'nfe'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" /> NF-e
+                </button>
+                <button
+                  onClick={() => setDocTab('promissoria')}
+                  className={`flex-1 py-2 flex items-center justify-center gap-1.5 transition-colors border-l border-slate-200 ${
+                    docTab === 'promissoria'
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <FileSignature className="w-3.5 h-3.5" /> Nota Promissória
+                </button>
+              </div>
+
+              {docTab === 'nfe' ? (
+                <div className="space-y-3 text-xs">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
+                    <p className="font-bold text-slate-700">Dados da NF-e</p>
+                    <p>
+                      <span className="text-slate-400">Emitente:</span>{' '}
+                      <strong>{company?.name || '-'}</strong> — CNPJ {company?.cnpj || '-'}
+                    </p>
+                    <p>
+                      <span className="text-slate-400">Destinatário:</span>{' '}
+                      <strong>{customer?.name || '-'}</strong> — CNPJ/CPF {customer?.cnpj || '-'}
+                    </p>
+                    <p>
+                      <span className="text-slate-400">Itens:</span> {items.length} produto(s) •
+                      Valor: R$ {(sale.total || 0).toFixed(2)}
+                    </p>
+                    <p>
+                      <span className="text-slate-400">Impostos:</span> ICMS 18% calculado sobre o
+                      subtotal
+                    </p>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    A NF-e será gerada como PDF (use &quot;Salvar como PDF&quot; na janela de
+                    impressão).
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Nº de Parcelas
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={installmentCount}
+                        onChange={(e) =>
+                          setInstallmentCount(Math.max(1, parseInt(e.target.value) || 1))
+                        }
+                        className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        1º Vencimento
+                      </label>
+                      <input
+                        type="date"
+                        value={firstDueDate}
+                        onChange={(e) => setFirstDueDate(e.target.value)}
+                        className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <p className="font-bold text-slate-700 mb-1.5">Resumo das Parcelas</p>
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {generateInstallments().map((i) => (
+                        <div
+                          key={i.number}
+                          className="flex items-center justify-between text-[11px] text-slate-600"
+                        >
+                          <span>
+                            Parcela {i.number} — {new Date(i.dueDate).toLocaleDateString('pt-BR')}
+                          </span>
+                          <span className="font-semibold text-slate-800">
+                            R$ {i.value.toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-200">
+                      Devedor: <strong>{customer?.name || '-'}</strong> • Beneficiário:{' '}
+                      <strong>{company?.name || '-'}</strong>
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2">
+              <button
+                onClick={() => openEmailModal(docTab)}
+                className="px-3.5 py-2 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                <span>Enviar por Email</span>
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveModal(null)}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  Fechar
+                </button>
+                <button
+                  onClick={() => (docTab === 'nfe' ? generateNfe() : generatePromissoria())}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs shadow-indigo-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Gerar PDF</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Email Modal ---- */}
+      {activeModal === 'email' && sale && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Enviar Documento por Email</h3>
+                  <p className="text-xs text-slate-500">
+                    Anexo: {emailDocType === 'nfe' ? 'NF-e' : 'Nota Promissória'} em PDF
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => fillEmailTemplate('nfe')}
+                  className={`px-3 py-2 text-xs font-semibold rounded-xl border transition-colors flex items-center gap-1.5 justify-center ${
+                    emailDocType === 'nfe'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" /> Anexar NF-e
+                </button>
+                <button
+                  onClick={() => fillEmailTemplate('promissoria')}
+                  className={`px-3 py-2 text-xs font-semibold rounded-xl border transition-colors flex items-center gap-1.5 justify-center ${
+                    emailDocType === 'promissoria'
+                      ? 'bg-violet-600 text-white border-violet-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <FileSignature className="w-3.5 h-3.5" /> Anexar Promissória
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Destinatário *
+                </label>
+                <input
+                  type="email"
+                  value={emailTo}
+                  onChange={(e) => setEmailTo(e.target.value)}
+                  placeholder="email@cliente.com.br"
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Assunto</label>
+                <input
+                  type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Corpo do Email
+                </label>
+                <textarea
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  rows={7}
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none font-mono text-xs"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Variáveis: {'{cliente}'}, {'{empresa}'}, {'{total}'}, {'{data}'}
+                </p>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setActiveModal(null)}
+                className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={sendEmail}
+                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl shadow-xs shadow-amber-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+                <span>Gerar PDF e Registrar Envio</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Email History Modal ---- */}
+      {activeModal === 'logs' && sale && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                  <History className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Histórico de Envios</h3>
+                  <p className="text-xs text-slate-500">Documentos enviados desta venda</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {emailLogs.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  Nenhum envio registrado para esta venda.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {emailLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-3"
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                          log.doc_type === 'nfe'
+                            ? 'bg-indigo-100 text-indigo-700'
+                            : 'bg-violet-100 text-violet-700'
+                        }`}
+                      >
+                        {log.doc_type === 'nfe' ? (
+                          <FileText className="w-4 h-4" />
+                        ) : (
+                          <FileSignature className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-slate-800 truncate">
+                          {log.subject || 'Sem assunto'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 truncate">
+                          Para: {log.to_email} • {new Date(log.created).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

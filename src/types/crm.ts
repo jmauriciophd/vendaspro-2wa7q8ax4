@@ -7,8 +7,11 @@ export interface Customer extends RecordModel {
   id: string
   name: string
   cnpj?: string
+  ie?: string
   owner_name?: string
   phone?: string
+  phone_whatsapp?: string
+  telegram?: string
   email?: string
   address?: string
   number?: string
@@ -29,10 +32,17 @@ export interface Product extends RecordModel {
   name: string
   category: ProductCategory
   unit?: string
+  code?: string
+  stock?: number
   price: number
+  ncm?: string
+  cfop?: string
   active: boolean
   created: string
   updated: string
+  expand?: {
+    'sale_items(product)'?: SaleItem[]
+  }
 }
 
 export type DealStage = 'prospeccao' | 'negociacao' | 'proposta' | 'fechado' | 'perdido'
@@ -89,11 +99,53 @@ export interface SaleItem extends RecordModel {
   }
 }
 
+export type UserRole = 'admin' | 'gerente' | 'vendedor'
+
 export interface User extends RecordModel {
   id: string
   email: string
   name?: string
   avatar?: string
+  role?: UserRole
+  active?: boolean
   created: string
   updated: string
+}
+
+export interface CompanySettings extends RecordModel {
+  id: string
+  name: string
+  cnpj?: string
+  ie?: string
+  im?: string
+  address?: string
+  number?: string
+  neighborhood?: string
+  city?: string
+  state?: string
+  cep?: string
+  phone?: string
+  email?: string
+  email_subject?: string
+  email_body?: string
+  created: string
+  updated: string
+}
+
+export type EmailDocType = 'nfe' | 'promissoria'
+
+export interface EmailLog extends RecordModel {
+  id: string
+  sale?: string
+  to_email: string
+  subject?: string
+  body?: string
+  doc_type?: EmailDocType
+  sent_by?: string
+  created: string
+  updated: string
+  expand?: {
+    sale?: Sale
+    sent_by?: User
+  }
 }

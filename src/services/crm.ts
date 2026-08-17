@@ -1,5 +1,15 @@
 import pb from '@/lib/pocketbase/client'
-import type { Customer, Product, Deal, Sale, SaleItem, User } from '@/types/crm'
+import type {
+  Customer,
+  Product,
+  Deal,
+  Sale,
+  SaleItem,
+  User,
+  CompanySettings,
+  EmailLog,
+  EmailDocType,
+} from '@/types/crm'
 
 export const customerService = {
   async getAll(params?: { search?: string; size?: string; status?: string; sort?: string }) {
@@ -39,7 +49,12 @@ export const customerService = {
 }
 
 export const productService = {
-  async getAll(params?: { activeOnly?: boolean; category?: string }) {
+  async getAll(params?: {
+    activeOnly?: boolean
+    category?: string
+    search?: string
+    sort?: string
+  }) {
     const filterParts: string[] = []
     if (params?.activeOnly) {
       filterParts.push('active = true')
@@ -47,15 +62,21 @@ export const productService = {
     if (params?.category && params.category !== 'all') {
       filterParts.push(`category = "${params.category}"`)
     }
+    if (params?.search) {
+      const s = params.search.replace(/"/g, '\\"')
+      filterParts.push(`(name ~ "${s}" || code ~ "${s}" || ncm ~ "${s}")`)
+    }
 
     return await pb.collection('products').getFullList<Product>({
       filter: filterParts.join(' && '),
-      sort: 'name',
+      sort: params?.sort || 'name',
     })
   },
 
   async getById(id: string) {
-    return await pb.collection('products').getOne<Product>(id)
+    return await pb.collection('products').getOne<Product>(id, {
+      expand: 'sale_items(product).sale,sale_items(product).sale.customer',
+    })
   },
 
   async create(data: Partial<Product>) {
@@ -64,6 +85,19 @@ export const productService = {
 
   async update(id: string, data: Partial<Product>) {
     return await pb.collection('products').update<Product>(id, data)
+  },
+
+  async delete(id: string) {
+    return await pb.collection('products').delete(id)
+  },
+
+  /** Sales history for a product (via sale_items) */
+  async getSalesHistory(productId: string) {
+    return await pb.collection('sale_items').getFullList<SaleItem>({
+      filter: `product = "${productId}"`,
+      sort: '-created',
+      expand: 'sale,sale.customer',
+    })
   },
 }
 
@@ -236,5 +270,80 @@ export const userService = {
     return await pb.collection('users').getFullList<User>({
       sort: 'name',
     })
+  },
+
+  async create(data: {
+    name: string
+    email: string
+    password: string
+    role?: User['role']
+    active?: boolean
+  }) {
+    return await pb.collection('users').create<User>({
+      name: data.name,
+      email: data.email,
+      password: data.password,
+      passwordConfirm: data.password,
+      emailVisibility: true,
+      role: data.role || 'vendedor',
+      active: data.active !== undefined ? data.active : true,
+    })
+  },
+
+  async update(
+    id: string,
+    data: Partial<{ name: string; role: User['role']; active: boolean; password: string }>,
+  ) {
+    const payload: Record<string, unknown> = {}
+    if (data.name !== undefined) payload.name = data.name
+    if (data.role !== undefined) payload.role = data.role
+    if (data.active !== undefined) payload.active = data.active
+    if (data.password) {
+      payload.password = data.password
+      payload.passwordConfirm = data.password
+    }
+    return await pb.collection('users').update<User>(id, payload)
+  },
+
+  async delete(id: string) {
+    return await pb.collection('users').delete(id)
+  },
+}
+
+export const companyService = {
+  async get() {
+    const list = await pb.collection('company_settings').getFullList<CompanySettings>({
+      sort: 'created',
+    })
+    return list[0] || null
+  },
+
+  async save(data: Partial<CompanySettings>) {
+    const existing = await this.get()
+    if (existing) {
+      return await pb.collection('company_settings').update<CompanySettings>(existing.id, data)
+    }
+    return await pb.collection('company_settings').create<CompanySettings>(data)
+  },
+}
+
+export const emailLogService = {
+  async getBySale(saleId: string) {
+    return await pb.collection('email_logs').getFullList<EmailLog>({
+      filter: `sale = "${saleId}"`,
+      sort: '-created',
+      expand: 'sent_by',
+    })
+  },
+
+  async create(data: {
+    sale: string
+    to_email: string
+    subject?: string
+    body?: string
+    doc_type?: EmailDocType
+    sent_by?: string
+  }) {
+    return await pb.collection('email_logs').create<EmailLog>(data)
   },
 }

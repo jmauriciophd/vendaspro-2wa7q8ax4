@@ -16,18 +16,38 @@ import {
   TrendingUp,
   Building2,
   DollarSign,
+  Package,
+  Users,
+  ShieldHalf,
+  Settings,
 } from 'lucide-react'
 import { QuickCustomerModal } from '@/components/QuickCustomerModal'
-import { customerService, dealService } from '@/services/crm'
-import type { Customer, Deal } from '@/types/crm'
+import { customerService, dealService, companyService } from '@/services/crm'
+import type { Customer, Deal, CompanySettings } from '@/types/crm'
+import { CompanySettingsModal } from '@/components/CompanySettingsModal'
+import { toast } from 'sonner'
 
 export default function Layout() {
-  const { user, logout, isLoading } = useAuth()
+  const { user, logout, isLoading, isManager, isAdmin } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [quickCustomerModalOpen, setQuickCustomerModalOpen] = useState(false)
+  const [companySettingsOpen, setCompanySettingsOpen] = useState(false)
+  const [company, setCompany] = useState<CompanySettings | null>(null)
+
+  const loadCompany = async () => {
+    try {
+      const c = await companyService.get()
+      setCompany(c)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+  useEffect(() => {
+    loadCompany()
+  }, [])
 
   // Global search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -108,8 +128,10 @@ export default function Layout() {
     { label: 'Dashboard', path: '/', icon: LayoutGrid },
     { label: 'Pipeline', path: '/pipeline', icon: Columns3 },
     { label: 'Clientes', path: '/clientes', icon: Store },
+    { label: 'Produtos', path: '/produtos', icon: Package },
     { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
     { label: 'Relatórios', path: '/relatorios', icon: BarChart3 },
+    ...(isManager ? [{ label: 'Equipe', path: '/equipe', icon: Users }] : []),
   ]
 
   const userInitials = (user.name || user.email || 'U')
@@ -171,7 +193,17 @@ export default function Layout() {
         </nav>
 
         {/* User Card in Footer */}
-        <div className="p-3 border-t border-slate-100 bg-slate-50/50">
+        <div className="p-3 border-t border-slate-100 bg-slate-50/50 space-y-2">
+          {isAdmin && (
+            <button
+              onClick={() => setCompanySettingsOpen(true)}
+              title="Configurar dados fiscais da empresa"
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-indigo-100"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Dados da Empresa</span>
+            </button>
+          )}
           <div className="p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-lg bg-indigo-600/10 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0 border border-indigo-200/50">
@@ -423,6 +455,13 @@ export default function Layout() {
         onCustomerCreated={() => {
           // Trigger any reload or navigate if needed
         }}
+      />
+
+      <CompanySettingsModal
+        isOpen={companySettingsOpen}
+        onClose={() => setCompanySettingsOpen(false)}
+        company={company}
+        onSaved={loadCompany}
       />
     </div>
   )

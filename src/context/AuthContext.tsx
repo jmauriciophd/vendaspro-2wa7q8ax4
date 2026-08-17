@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
 import type { User } from '@/types/crm'
 
+type Role = 'admin' | 'gerente' | 'vendedor'
+
 interface AuthContextType {
   user: User | null
   isLoading: boolean
@@ -9,6 +11,10 @@ interface AuthContextType {
   register: (name: string, email: string, pass: string) => Promise<void>
   logout: () => void
   refreshUser: () => void
+  role: Role
+  isAdmin: boolean
+  isManager: boolean
+  canManageTeam: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -67,8 +73,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  const role: Role = (user?.role as Role) || 'vendedor'
+  const isAdmin = role === 'admin'
+  const isManager = role === 'admin' || role === 'gerente'
+  const canManageTeam = isManager
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        login,
+        register,
+        logout,
+        refreshUser,
+        role,
+        isAdmin,
+        isManager,
+        canManageTeam,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
