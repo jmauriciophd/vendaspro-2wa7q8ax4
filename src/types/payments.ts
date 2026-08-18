@@ -149,6 +149,11 @@ export interface PaymentChargeListItem {
   canceled_at: string
   created: string
   updated: string
+  boleto_url: string
+  boleto_barcode: string
+  boleto_digitable_line: string
+  boleto_nosso_numero: string
+  boleto_document_number: string
 }
 
 export interface ChargeAuditEntry {
@@ -171,6 +176,15 @@ export interface PaymentChargeDetail extends PaymentChargeListItem {
   provider_response: Record<string, unknown>
   created_by: string
   timeline: ChargeAuditEntry[]
+}
+
+// Dados de boleto compartilhados entre list/detail/result.
+export interface BoletoData {
+  boleto_url: string
+  boleto_barcode: string
+  boleto_digitable_line: string
+  boleto_nosso_numero: string
+  boleto_document_number: string
 }
 
 export interface CreateChargeInput {
@@ -200,6 +214,15 @@ export interface CreateChargeResult {
   pix_code: string
   expires_at: string
   created: string
+  boleto_url: string
+  boleto_barcode: string
+  boleto_digitable_line: string
+  boleto_nosso_numero: string
+  boleto_document_number: string
+}
+
+export interface RegenerateBoletoResult extends CreateChargeResult {
+  regenerated_from: string
 }
 
 export interface SendChargeInput {

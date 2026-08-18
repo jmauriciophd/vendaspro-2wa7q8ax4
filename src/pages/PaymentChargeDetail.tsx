@@ -18,6 +18,8 @@ import {
   Clock,
   BadgeCheck,
   Layers,
+  FileText,
+  AlertTriangle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -29,12 +31,14 @@ import {
   chargeStatusBadge,
   paymentMethodLabels,
   paymentMethodBadge,
+  isBoletoExpired,
 } from '@/services/paymentService'
 import type { PaymentChargeDetail } from '@/types/payments'
 import { useAuth } from '@/context/AuthContext'
 import { PixDisplay } from '@/components/payments/PixDisplay'
 import { ChargeTimeline } from '@/components/payments/ChargeTimeline'
 import { SendChargeModal } from '@/components/payments/SendChargeModal'
+import { BoletoView } from '@/components/payments/BoletoView'
 
 export default function PaymentChargeDetail() {
   const { id } = useParams<{ id: string }>()
@@ -80,6 +84,20 @@ export default function PaymentChargeDetail() {
   const canRefund =
     isAdmin && charge && (charge.status === 'paid' || charge.status === 'partially_refunded')
   const isOwner = user?.id === charge?.seller_id
+
+  const isBoleto = charge?.payment_method === 'boleto'
+  const boletoExpired = isBoleto ? isBoletoExpired(charge?.expires_at) : false
+  const canRegenerateBoleto =
+    isBoleto &&
+    charge &&
+    (charge.status === 'expired' ||
+      charge.status === 'canceled' ||
+      (boletoExpired && (charge.status === 'pending' || charge.status === 'waiting_payment')))
+  const boletoWaiting =
+    isBoleto &&
+    (charge?.status === 'pending' || charge?.status === 'waiting_payment') &&
+    !boletoExpired
+  const [regenerateOpen, setRegenerateOpen] = useState(false)
 
   const handleCopyLink = async () => {
     if (!charge?.payment_url) return
@@ -224,6 +242,14 @@ export default function PaymentChargeDetail() {
               <Undo2 className="w-3.5 h-3.5" /> Reembolsar
             </button>
           )}
+          {canRegenerateBoleto && (
+            <button
+              onClick={() => setRegenerateOpen(true)}
+              className="px-3.5 py-2 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5" /> Gerar novo boleto
+            </button>
+          )}
         </div>
       </div>
 
@@ -358,6 +384,60 @@ export default function PaymentChargeDetail() {
                   Pagamento PIX
                 </h4>
                 <PixDisplay pixCode={charge.pix_code} qrcode={charge.pix_qrcode} />
+              </div>
+            )}
+
+            {/* BOLETO */}
+            {charge.payment_method === 'boleto' && (
+              <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-amber-600" /> Boleto Bancário
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    {boletoWaiting && (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border bg-amber-50 text-amber-700 border-amber-200">
+                        <Clock className="w-3 h-3 mr-1" /> Aguardando pagamento
+                      </span>
+                    )}
+                    {boletoExpired && charge.status !== 'canceled' && charge.status !== 'paid' && (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border bg-rose-50 text-rose-700 border-rose-200">
+                        <AlertTriangle className="w-3 h-3 mr-1" /> Vencido
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {charge.boleto_barcode || charge.boleto_digitable_line ? (
+                  <BoletoView
+                    boleto={{
+                      boleto_url: charge.boleto_url,
+                      boleto_barcode: charge.boleto_barcode,
+                      boleto_digitable_line: charge.boleto_digitable_line,
+                      boleto_nosso_numero: charge.boleto_nosso_numero,
+                      boleto_document_number: charge.boleto_document_number,
+                      final_amount: charge.final_amount,
+                      expires_at: charge.expires_at,
+                      client_name: charge.client_name,
+                      provider_name: charge.provider_name,
+                      external_charge_id: charge.external_charge_id,
+                    }}
+                  />
+                ) : (
+                  <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                    Boleto ainda não gerado pelo provedor. Use “Gerar novo boleto” para tentar
+                    novamente.
+                  </div>
+                )}
+
+                {canRegenerateBoleto && (
+                  <button
+                    onClick={() => setRegenerateOpen(true)}
+                    className="w-full px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" /> Gerar novo boleto com nova data
+                  </button>
+                )}
               </div>
             )}
 
@@ -517,6 +597,111 @@ export default function PaymentChargeDetail() {
           }}
         />
       )}
+
+      {regenerateOpen && (
+        <RegenerateBoletoModal
+          chargeId={charge.id}
+          onClose={() => setRegenerateOpen(false)}
+          onRegenerated={(newId) => {
+            setRegenerateOpen(false)
+            toast.success('Novo boleto gerado.')
+            navigate('/financeiro/cobrancas/' + newId)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ----- Regenerar Boleto -----
+function RegenerateBoletoModal({
+  chargeId,
+  onClose,
+  onRegenerated,
+}: {
+  chargeId: string
+  onClose: () => void
+  onRegenerated: (newId: string) => void
+}) {
+  const [expiresAt, setExpiresAt] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 3)
+    return d.toISOString().split('T')[0]
+  })
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!expiresAt) {
+      toast.error('Informe a nova data de vencimento.')
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await paymentService.regenerateBoleto(chargeId, expiresAt)
+      onRegenerated(res.id)
+    } catch (err) {
+      console.error(err)
+      const msg = (err as any)?.response?.message || 'Erro ao gerar novo boleto.'
+      toast.error(msg)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md flex flex-col overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">Gerar novo boleto</h3>
+              <p className="text-xs text-slate-500">
+                A cobrança atual será cancelada e um novo boleto será criado.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 rotate-180" />
+          </button>
+        </div>
+        <div className="p-6 space-y-3">
+          <p className="text-xs text-slate-500">
+            Informe a nova data de vencimento para o boleto regenerado.
+          </p>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Nova data de vencimento *
+            </label>
+            <input
+              type="date"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+              className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+            />
+          </div>
+        </div>
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
+          >
+            <FileText className="w-4 h-4" /> {loading ? 'Gerando...' : 'Gerar boleto'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

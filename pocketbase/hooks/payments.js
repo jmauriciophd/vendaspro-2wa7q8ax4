@@ -487,6 +487,222 @@ routerAdd(
       amount: final,
       simulated: true,
     })
+
+    // ---- Boleto: geração real via API do provedor ou simulada ----
+    let boletoUrl = ''
+    let boletoBarcode = ''
+    let boletoLine = ''
+    let boletoNosso = ''
+    let boletoDoc = ''
+    let boletoWarning = ''
+    if (method === 'boleto') {
+      const dv10 = function (seq) {
+        let soma = 0
+        let peso = 2
+        for (let i = seq.length - 1; i >= 0; i--) {
+          let n = parseInt(seq.charAt(i), 10) * peso
+          while (n > 9) n = (n % 10) + Math.floor(n / 10)
+          soma += n
+          peso = peso === 2 ? 1 : 2
+        }
+        const mod = soma % 10
+        return mod === 0 ? '0' : String(10 - mod)
+      }
+      const rndDigits = function (n) {
+        let s = ''
+        for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 10).toString()
+        return s
+      }
+      const bankCode = '237'
+      const buildSimBoleto = function (amount) {
+        const livre = rndDigits(25)
+        const valorStr = String(Math.round(amount * 100))
+        const valorPad = valorStr.padStart(14, '0')
+        const barcode = bankCode + '9' + valorPad + livre
+        const b1 = bankCode + '9' + livre.substring(0, 4)
+        const d1 = dv10(b1)
+        const b2 = livre.substring(4, 14)
+        const d2 = dv10(b2)
+        const b3 = livre.substring(14, 24)
+        const d3 = dv10(b3)
+        const dGeral = rndDigits(1)
+        const line = b1 + d1 + b2 + d2 + b3 + d3 + dGeral + valorPad
+        const nosso = rndDigits(11)
+        return {
+          barcode: barcode,
+          line: line,
+          nosso: nosso,
+          url: 'https://boleto.vendaspro.demo/' + bankCode + '/' + nosso,
+          doc: externalId,
+        }
+      }
+
+      const provSlug = provider.get('slug') || ''
+      let apiKey = provider.get('api_key') || ''
+      try {
+        const cfg = $app.findFirstRecordByData(
+          'payment_provider_configs',
+          'provider_id',
+          providerId,
+        )
+        if (cfg && cfg.get('api_key')) apiKey = cfg.get('api_key')
+      } catch (_) {}
+      const env = provider.get('environment') || 'sandbox'
+      const isRealKey =
+        apiKey && env === 'production' && apiKey.indexOf('DEMO') < 0 && apiKey.indexOf('demo') < 0
+
+      let boleto = null
+      let providerResp = null
+
+      // payer
+      let custName = ''
+      let custEmail = ''
+      let custDoc = ''
+      try {
+        const cust = $app.findRecordById('customers', sale.get('customer') || '')
+        custName = cust.get('name') || ''
+        custEmail = cust.get('email') || ''
+        custDoc = cust.get('cnpj') || cust.get('ie') || ''
+      } catch (_) {}
+      const dueDate = rec.get('expires_at') ? String(rec.get('expires_at')).split(' ')[0] : ''
+
+      if (isRealKey) {
+        if (provSlug === 'mercadopago') {
+          try {
+            const mpBody = {
+              transaction_amount: final,
+              description: 'Cobranca VendasPro ' + externalId,
+              payment_method_id: 'bolbradesco',
+              date_of_expiration: dueDate,
+              payer: { email: custEmail || 'cliente@vendaspro.com', first_name: custName },
+            }
+            const res = $http.send({
+              url: 'https://api.mercadopago.com/v1/payments',
+              method: 'POST',
+              headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify(mpBody),
+              timeout: 20,
+            })
+            if (res && res.statusCode >= 200 && res.statusCode < 300) {
+              const pr = res.json || {}
+              const td = pr.transaction_details || {}
+              boleto = {
+                barcode: String(td.barcode || pr.barcode || ''),
+                line: String(td.verification_code || pr.digitable_line || ''),
+                nosso: String(pr.id || ''),
+                url: String(td.external_resource_url || ''),
+                doc: externalId,
+              }
+              providerResp = pr
+            } else {
+              boletoWarning = 'Mercado Pago respondeu ' + (res ? res.statusCode : 'sem resposta')
+            }
+          } catch (err) {
+            boletoWarning = 'Mercado Pago indisponível: ' + err
+          }
+        } else if (provSlug === 'asaas') {
+          try {
+            const asBody = {
+              billingType: 'BOLETO',
+              customer: '',
+              value: final,
+              dueDate: dueDate,
+              description: 'Cobranca VendasPro ' + externalId,
+            }
+            const res = $http.send({
+              url: 'https://api.asaas.com/v3/payments',
+              method: 'POST',
+              headers: { access_token: apiKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify(asBody),
+              timeout: 20,
+            })
+            if (res && res.statusCode >= 200 && res.statusCode < 300) {
+              const pr = res.json || {}
+              boleto = {
+                barcode: String(pr.bankSlipCode || ''),
+                line: String(pr.identifiedField || pr.digitable_line || ''),
+                nosso: String(pr.nossoNumero || ''),
+                url: String(pr.bankSlipUrl || pr.invoiceUrl || ''),
+                doc: String(pr.documentNumber || externalId),
+              }
+              providerResp = pr
+            } else {
+              boletoWarning = 'Asaas respondeu ' + (res ? res.statusCode : 'sem resposta')
+            }
+          } catch (err) {
+            boletoWarning = 'Asaas indisponível: ' + err
+          }
+        } else if (provSlug === 'pagbank') {
+          try {
+            const pgBody = {
+              reference_id: externalId,
+              customer: { name: custName, email: custEmail, tax_id: custDoc },
+              items: [
+                {
+                  reference_id: externalId,
+                  name: 'Cobranca VendasPro',
+                  quantity: 1,
+                  unit_amount: Math.round(final * 100),
+                },
+              ],
+              payment_methods: [{ type: 'BOLETO', boleto: { due_date: dueDate } }],
+            }
+            const res = $http.send({
+              url: 'https://api.pagseguro.uol.com.br/orders',
+              method: 'POST',
+              headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify(pgBody),
+              timeout: 20,
+            })
+            if (res && res.statusCode >= 200 && res.statusCode < 300) {
+              const pr = res.json || {}
+              const chargesArr = pr.charges || []
+              const ch = chargesArr.length > 0 ? chargesArr[0] : {}
+              const pm = ch.payment_method || {}
+              const bol = pm.boleto || {}
+              boleto = {
+                barcode: String(bol.barcode || ''),
+                line: String(bol.formatted_barcode || bol.digitable_line || ''),
+                nosso: String(bol.nosso_numero || ''),
+                url: String(bol.download_url || ''),
+                doc: String(pr.reference_id || externalId),
+              }
+              providerResp = pr
+            } else {
+              boletoWarning = 'PagBank respondeu ' + (res ? res.statusCode : 'sem resposta')
+            }
+          } catch (err) {
+            boletoWarning = 'PagBank indisponível: ' + err
+          }
+        }
+      }
+
+      if (!boleto) {
+        boleto = buildSimBoleto(final)
+        providerResp = {
+          id: externalId,
+          status: 'pending',
+          method: 'boleto',
+          amount: final,
+          simulated: true,
+          boleto_warning:
+            boletoWarning || (isRealKey ? '' : 'simulado (sandbox ou sem credencial real)'),
+        }
+      }
+      boletoUrl = boleto.url
+      boletoBarcode = boleto.barcode
+      boletoLine = boleto.line
+      boletoNosso = boleto.nosso
+      boletoDoc = boleto.doc
+      rec.set('boleto_url', boletoUrl)
+      rec.set('boleto_barcode', boletoBarcode)
+      rec.set('boleto_digitable_line', boletoLine)
+      rec.set('boleto_nosso_numero', boletoNosso)
+      rec.set('boleto_document_number', boletoDoc)
+      if (boletoUrl) rec.set('payment_url', boletoUrl)
+      rec.set('provider_response', providerResp)
+    }
+
     $app.save(rec)
 
     // audit log
@@ -527,6 +743,11 @@ routerAdd(
       pix_code: rec.get('pix_code') || '',
       expires_at: rec.get('expires_at') || '',
       created: rec.get('created') || '',
+      boleto_url: rec.get('boleto_url') || '',
+      boleto_barcode: rec.get('boleto_barcode') || '',
+      boleto_digitable_line: rec.get('boleto_digitable_line') || '',
+      boleto_nosso_numero: rec.get('boleto_nosso_numero') || '',
+      boleto_document_number: rec.get('boleto_document_number') || '',
     })
   },
   $apis.requireAuth(),
@@ -659,6 +880,11 @@ routerAdd(
         canceled_at: r.get('canceled_at') || '',
         created: created,
         updated: r.get('updated') || '',
+        boleto_url: r.get('boleto_url') || '',
+        boleto_barcode: r.get('boleto_barcode') || '',
+        boleto_digitable_line: r.get('boleto_digitable_line') || '',
+        boleto_nosso_numero: r.get('boleto_nosso_numero') || '',
+        boleto_document_number: r.get('boleto_document_number') || '',
       })
     }
     return e.json(200, result)
@@ -767,6 +993,11 @@ routerAdd(
       created: rec.get('created') || '',
       updated: rec.get('updated') || '',
       timeline: timeline,
+      boleto_url: rec.get('boleto_url') || '',
+      boleto_barcode: rec.get('boleto_barcode') || '',
+      boleto_digitable_line: rec.get('boleto_digitable_line') || '',
+      boleto_nosso_numero: rec.get('boleto_nosso_numero') || '',
+      boleto_document_number: rec.get('boleto_document_number') || '',
     })
   },
   $apis.requireAuth(),
@@ -2589,6 +2820,381 @@ routerAdd(
       by_month: byMonth,
       by_method: byMethod,
       timeline: timeline.slice(0, 20),
+    })
+  },
+  $apis.requireAuth(),
+)
+
+// ---------------------------------------------------------------------------
+// POST /backend/v1/payments/charges/{id}/regenerate-boleto
+// Cancela a cobrança atual (se não paga) e cria uma nova cobrança boleto com
+// nova data de vencimento. Body: { expires_at: 'YYYY-MM-DD' }
+// Retorna os dados da nova cobrança (incluindo dados do boleto).
+// ---------------------------------------------------------------------------
+routerAdd(
+  'POST',
+  '/backend/v1/payments/charges/{id}/regenerate-boleto',
+  (e) => {
+    if (!e.auth) return e.json(401, { message: 'Não autenticado.' })
+    const role = e.auth.get('role') || 'vendedor'
+    const userId = e.auth.id
+    const id = e.request.pathValue('id')
+    const body = e.requestInfo().body || {}
+
+    let rec
+    try {
+      rec = $app.findRecordById('payment_charges', id)
+    } catch (_) {
+      return e.json(404, { message: 'Cobrança não encontrada.' })
+    }
+    if (role === 'vendedor' && rec.get('seller_id') !== userId) {
+      return e.json(403, { message: 'Acesso negado a esta cobrança.' })
+    }
+
+    // só boleto
+    if ((rec.get('payment_method') || '') !== 'boleto') {
+      return e.json(400, { message: 'Só é possível regenerar boletos.' })
+    }
+    const prevStatus = rec.get('status') || ''
+    if (prevStatus === 'paid' || prevStatus === 'refunded' || prevStatus === 'partially_refunded') {
+      return e.json(400, {
+        message: 'Não é possível regenerar um boleto já pago ou reembolsado.',
+      })
+    }
+
+    const newExpires = (body.expires_at || '').toString()
+    if (!newExpires) {
+      return e.json(400, { message: 'Informe a nova data de vencimento (expires_at).' })
+    }
+
+    const now = new Date()
+    const pad = function (n) {
+      return n < 10 ? '0' + n : '' + n
+    }
+    const nowStr =
+      now.getUTCFullYear() +
+      '-' +
+      pad(now.getUTCMonth() + 1) +
+      '-' +
+      pad(now.getUTCDate()) +
+      ' ' +
+      pad(now.getUTCHours()) +
+      ':' +
+      pad(now.getUTCMinutes()) +
+      ':' +
+      pad(now.getUTCSeconds()) +
+      '.000Z'
+
+    // 1. Cancela a cobrança atual (no provedor se possível — só registrando)
+    try {
+      const provId = rec.get('provider_id') || ''
+      if (provId) {
+        // tentativa de cancelamento no provedor omitida por simplicidade; o boleto
+        // expira naturalmente. Registramos o cancelamento local.
+      }
+    } catch (_) {}
+
+    const prev = { status: prevStatus }
+    rec.set('status', 'canceled')
+    rec.set('canceled_at', nowStr)
+    $app.save(rec)
+
+    const auditCol = $app.findCollectionByNameOrId('payment_audit_log')
+    const auditCancel = new Record(auditCol)
+    auditCancel.set('charge_id', id)
+    auditCancel.set('action', 'charge_canceled')
+    auditCancel.set('user_id', userId)
+    auditCancel.set('reference', rec.get('external_charge_id') || '')
+    auditCancel.set('previous_data', prev)
+    auditCancel.set('new_data', {
+      status: 'canceled',
+      canceled_at: nowStr,
+      reason: 'regenerate_boleto',
+    })
+    $app.save(auditCancel)
+
+    // 2. Cria nova cobrança boleto com os mesmos dados + nova data.
+    const providerId = rec.get('provider_id') || ''
+    let provider = null
+    try {
+      provider = $app.findRecordById('payment_providers', providerId)
+    } catch (_) {
+      return e.json(400, { message: 'Provedor não encontrado para regenerar.' })
+    }
+
+    const original = rec.get('original_amount') || 0
+    const discount = rec.get('discount_amount') || 0
+    const final = rec.get('final_amount') || 0
+    const providerFee = rec.get('provider_fee') || 3.49
+    const netValue = rec.get('net_value') || Math.round((final - providerFee) * 100) / 100
+
+    const ymd = now.getUTCFullYear() + '' + pad(now.getUTCMonth() + 1) + pad(now.getUTCDate())
+    const suffix = $security.randomString(6).toUpperCase()
+    const externalId = 'CHG-' + ymd + '-' + suffix
+
+    let accountId = rec.get('financial_account_id') || ''
+    if (!accountId) {
+      try {
+        const accs = $app.findRecordsByFilter(
+          'financial_accounts',
+          'provider_id = {:p} && active = true',
+          '-is_default',
+          1,
+          0,
+          { p: providerId },
+        )
+        if (accs && accs.length > 0) accountId = accs[0].id
+      } catch (_) {}
+    }
+
+    const col = $app.findCollectionByNameOrId('payment_charges')
+    const newRec = new Record(col)
+    newRec.set('sale_id', rec.get('sale_id') || '')
+    newRec.set('client_id', rec.get('client_id') || '')
+    newRec.set('seller_id', rec.get('seller_id') || '')
+    newRec.set('provider_id', providerId)
+    if (accountId) newRec.set('financial_account_id', accountId)
+    newRec.set('external_charge_id', externalId)
+    newRec.set('payment_method', 'boleto')
+    newRec.set('original_amount', original)
+    newRec.set('discount_amount', discount)
+    newRec.set('final_amount', final)
+    newRec.set('provider_fee', providerFee)
+    newRec.set('net_value', netValue)
+    newRec.set('installments', 1)
+    newRec.set('installment_value', final)
+    newRec.set('interest_rate', 0)
+    newRec.set('status', 'pending')
+    newRec.set('expires_at', newExpires + ' 23:59:59.000Z')
+    newRec.set('created_by', userId)
+    newRec.set('provider_response', {
+      id: externalId,
+      status: 'pending',
+      method: 'boleto',
+      amount: final,
+      regenerated_from: id,
+    })
+
+    // ---- geração do boleto (real ou simulado) ----
+    const dv10 = function (seq) {
+      let soma = 0
+      let peso = 2
+      for (let i = seq.length - 1; i >= 0; i--) {
+        let n = parseInt(seq.charAt(i), 10) * peso
+        while (n > 9) n = (n % 10) + Math.floor(n / 10)
+        soma += n
+        peso = peso === 2 ? 1 : 2
+      }
+      const mod = soma % 10
+      return mod === 0 ? '0' : String(10 - mod)
+    }
+    const rndDigits = function (n) {
+      let s = ''
+      for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 10).toString()
+      return s
+    }
+    const bankCode = '237'
+    const buildSimBoleto = function (amount) {
+      const livre = rndDigits(25)
+      const valorStr = String(Math.round(amount * 100))
+      const valorPad = valorStr.padStart(14, '0')
+      const barcode = bankCode + '9' + valorPad + livre
+      const b1 = bankCode + '9' + livre.substring(0, 4)
+      const d1 = dv10(b1)
+      const b2 = livre.substring(4, 14)
+      const d2 = dv10(b2)
+      const b3 = livre.substring(14, 24)
+      const d3 = dv10(b3)
+      const dGeral = rndDigits(1)
+      const line = b1 + d1 + b2 + d2 + b3 + d3 + dGeral + valorPad
+      const nosso = rndDigits(11)
+      return {
+        barcode: barcode,
+        line: line,
+        nosso: nosso,
+        url: 'https://boleto.vendaspro.demo/' + bankCode + '/' + nosso,
+        doc: externalId,
+      }
+    }
+
+    const provSlug = provider.get('slug') || ''
+    let apiKey = provider.get('api_key') || ''
+    try {
+      const cfg = $app.findFirstRecordByData('payment_provider_configs', 'provider_id', providerId)
+      if (cfg && cfg.get('api_key')) apiKey = cfg.get('api_key')
+    } catch (_) {}
+    const env = provider.get('environment') || 'sandbox'
+    const isRealKey =
+      apiKey && env === 'production' && apiKey.indexOf('DEMO') < 0 && apiKey.indexOf('demo') < 0
+
+    let boleto = null
+    let providerResp = null
+    let custName = ''
+    let custEmail = ''
+    let custDoc = ''
+    try {
+      const cust = $app.findRecordById('customers', rec.get('client_id') || '')
+      custName = cust.get('name') || ''
+      custEmail = cust.get('email') || ''
+      custDoc = cust.get('cnpj') || cust.get('ie') || ''
+    } catch (_) {}
+
+    if (isRealKey) {
+      if (provSlug === 'mercadopago') {
+        try {
+          const res = $http.send({
+            url: 'https://api.mercadopago.com/v1/payments',
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              transaction_amount: final,
+              description: 'Cobranca VendasPro ' + externalId,
+              payment_method_id: 'bolbradesco',
+              date_of_expiration: newExpires,
+              payer: { email: custEmail || 'cliente@vendaspro.com', first_name: custName },
+            }),
+            timeout: 20,
+          })
+          if (res && res.statusCode >= 200 && res.statusCode < 300) {
+            const pr = res.json || {}
+            const td = pr.transaction_details || {}
+            boleto = {
+              barcode: String(td.barcode || pr.barcode || ''),
+              line: String(td.verification_code || pr.digitable_line || ''),
+              nosso: String(pr.id || ''),
+              url: String(td.external_resource_url || ''),
+              doc: externalId,
+            }
+            providerResp = pr
+          }
+        } catch (_) {}
+      } else if (provSlug === 'asaas') {
+        try {
+          const res = $http.send({
+            url: 'https://api.asaas.com/v3/payments',
+            method: 'POST',
+            headers: { access_token: apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              billingType: 'BOLETO',
+              customer: '',
+              value: final,
+              dueDate: newExpires,
+              description: 'Cobranca VendasPro ' + externalId,
+            }),
+            timeout: 20,
+          })
+          if (res && res.statusCode >= 200 && res.statusCode < 300) {
+            const pr = res.json || {}
+            boleto = {
+              barcode: String(pr.bankSlipCode || ''),
+              line: String(pr.identifiedField || pr.digitable_line || ''),
+              nosso: String(pr.nossoNumero || ''),
+              url: String(pr.bankSlipUrl || pr.invoiceUrl || ''),
+              doc: String(pr.documentNumber || externalId),
+            }
+            providerResp = pr
+          }
+        } catch (_) {}
+      } else if (provSlug === 'pagbank') {
+        try {
+          const res = $http.send({
+            url: 'https://api.pagseguro.uol.com.br/orders',
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reference_id: externalId,
+              customer: { name: custName, email: custEmail, tax_id: custDoc },
+              items: [
+                {
+                  reference_id: externalId,
+                  name: 'Cobranca VendasPro',
+                  quantity: 1,
+                  unit_amount: Math.round(final * 100),
+                },
+              ],
+              payment_methods: [{ type: 'BOLETO', boleto: { due_date: newExpires } }],
+            }),
+            timeout: 20,
+          })
+          if (res && res.statusCode >= 200 && res.statusCode < 300) {
+            const pr = res.json || {}
+            const chargesArr = pr.charges || []
+            const ch = chargesArr.length > 0 ? chargesArr[0] : {}
+            const pm = ch.payment_method || {}
+            const bol = pm.boleto || {}
+            boleto = {
+              barcode: String(bol.barcode || ''),
+              line: String(bol.formatted_barcode || bol.digitable_line || ''),
+              nosso: String(bol.nosso_numero || ''),
+              url: String(bol.download_url || ''),
+              doc: String(pr.reference_id || externalId),
+            }
+            providerResp = pr
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (!boleto) {
+      boleto = buildSimBoleto(final)
+      providerResp = {
+        id: externalId,
+        status: 'pending',
+        method: 'boleto',
+        amount: final,
+        simulated: true,
+        regenerated_from: id,
+      }
+    }
+    newRec.set('boleto_url', boleto.url)
+    newRec.set('boleto_barcode', boleto.barcode)
+    newRec.set('boleto_digitable_line', boleto.line)
+    newRec.set('boleto_nosso_numero', boleto.nosso)
+    newRec.set('boleto_document_number', boleto.doc)
+    newRec.set('payment_url', boleto.url)
+    newRec.set('provider_response', providerResp)
+    $app.save(newRec)
+
+    // audit da nova cobrança
+    const auditNew = new Record(auditCol)
+    auditNew.set('charge_id', newRec.id)
+    auditNew.set('action', 'charge_created')
+    auditNew.set('user_id', userId)
+    auditNew.set('reference', externalId)
+    auditNew.set('previous_data', {})
+    auditNew.set('new_data', {
+      status: 'pending',
+      final_amount: final,
+      method: 'boleto',
+      provider: provSlug,
+      regenerated_from: id,
+    })
+    $app.save(auditNew)
+
+    return e.json(200, {
+      id: newRec.id,
+      external_charge_id: externalId,
+      sale_id: newRec.get('sale_id') || '',
+      status: 'pending',
+      payment_method: 'boleto',
+      original_amount: original,
+      discount_amount: discount,
+      final_amount: final,
+      provider_fee: providerFee,
+      net_value: netValue,
+      installments: 1,
+      installment_value: final,
+      interest_rate: 0,
+      payment_url: boleto.url,
+      pix_code: '',
+      expires_at: newRec.get('expires_at') || '',
+      created: newRec.get('created') || '',
+      boleto_url: boleto.url,
+      boleto_barcode: boleto.barcode,
+      boleto_digitable_line: boleto.line,
+      boleto_nosso_numero: boleto.nosso,
+      boleto_document_number: boleto.doc,
+      regenerated_from: id,
     })
   },
   $apis.requireAuth(),

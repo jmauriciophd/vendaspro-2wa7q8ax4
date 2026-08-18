@@ -11,6 +11,7 @@ import type {
   PaymentChargeDetail,
   CreateChargeInput,
   CreateChargeResult,
+  RegenerateBoletoResult,
   SendChargeInput,
   SendChargeResult,
   PaymentsDashboard,
@@ -136,6 +137,13 @@ export const paymentService = {
     params?: { amount?: number; reason?: string },
   ): Promise<{ id: string; status: string; refund_amount: number }> {
     return await pb.send(`${BASE}/charges/${id}/refund`, { method: 'POST', body: params || {} })
+  },
+
+  async regenerateBoleto(id: string, expiresAt: string): Promise<RegenerateBoletoResult> {
+    return await pb.send(`${BASE}/charges/${id}/regenerate-boleto`, {
+      method: 'POST',
+      body: { expires_at: expiresAt },
+    })
   },
 
   // ----- Dashboards -----
@@ -270,4 +278,47 @@ export function timeAgo(v?: string | null): string {
   const days = Math.floor(h / 24)
   if (days < 30) return `${days}d atrás`
   return d.toLocaleDateString('pt-BR')
+}
+
+/**
+ * Formata a linha digitável do boleto (47 dígitos) em blocos visuais:
+ * XXXXX.XXXXX XXXXX.XXXXXX XXXXX.XXXXXX X XXXX.XXXXXX.XXXXXX
+ * Se a linha não tiver o tamanho esperado, retorna como veio.
+ */
+export function formatBoletoDigitableLine(line?: string | null): string {
+  if (!line) return ''
+  const digits = line.replace(/\D/g, '')
+  if (digits.length === 47) {
+    return (
+      digits.substring(0, 5) +
+      '.' +
+      digits.substring(5, 9) +
+      ' ' +
+      digits.substring(10, 15) +
+      '.' +
+      digits.substring(15, 20) +
+      ' ' +
+      digits.substring(21, 26) +
+      '.' +
+      digits.substring(26, 31) +
+      ' ' +
+      digits.substring(32, 33) +
+      ' ' +
+      digits.substring(33, 37) +
+      '.' +
+      digits.substring(37, 43) +
+      '.' +
+      digits.substring(43, 47)
+    )
+  }
+  // fallback: agrupa de 5 em 5 com espaços
+  return digits.replace(/(.{5})/g, '$1 ').trim()
+}
+
+/** Indica se um boleto está vencido (expires_at anterior a hoje). */
+export function isBoletoExpired(expiresAt?: string | null): boolean {
+  if (!expiresAt) return false
+  const d = new Date(expiresAt)
+  if (isNaN(d.getTime())) return false
+  return d.getTime() < Date.now()
 }
