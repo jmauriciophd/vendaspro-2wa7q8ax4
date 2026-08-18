@@ -18,9 +18,15 @@ import type {
   ReconciliationData,
   ChargeStatus,
   PaymentMethod,
+  PaymentProviderConfig,
+  WebhookTestResult,
+  VerifyChargeResult,
+  FinancialReport,
 } from '@/types/payments'
 
 const BASE = '/backend/v1/payments'
+const WEBHOOK_BASE = '/backend/v1/webhooks/payments'
+const REPORTS_BASE = '/backend/v1/reports'
 
 export const paymentService = {
   // ----- Providers -----
@@ -143,6 +149,30 @@ export const paymentService = {
 
   async reconciliation(): Promise<ReconciliationData> {
     return await pb.send(`${BASE}/reconciliation`, { method: 'GET' })
+  },
+
+  // ----- Webhook Mercado Pago -----
+  async getMercadoPagoConfig(): Promise<PaymentProviderConfig> {
+    return await pb.send(`${WEBHOOK_BASE}/mercadopago/config`, { method: 'GET' })
+  },
+
+  async testMercadoPagoWebhook(chargeId?: string): Promise<WebhookTestResult> {
+    return await pb.send(`${WEBHOOK_BASE}/mercadopago/test`, {
+      method: 'POST',
+      body: chargeId ? { charge_id: chargeId } : {},
+    })
+  },
+
+  async verifyCharge(id: string): Promise<VerifyChargeResult> {
+    return await pb.send(`${BASE}/charges/${id}/verify`, { method: 'POST' })
+  },
+
+  // ----- Relatório Financeiro -----
+  async financialReport(params?: { month?: number; year?: number }): Promise<FinancialReport> {
+    const query: Record<string, string | number> = {}
+    if (params?.month) query.month = params.month
+    if (params?.year) query.year = params.year
+    return await pb.send(`${REPORTS_BASE}/financial`, { method: 'GET', query })
   },
 }
 

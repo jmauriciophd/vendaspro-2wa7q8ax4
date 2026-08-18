@@ -16,6 +16,8 @@ import {
   Calendar,
   Building2,
   Clock,
+  BadgeCheck,
+  Layers,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -122,6 +124,29 @@ export default function PaymentChargeDetail() {
     }
   }
 
+  const handleVerifyProvider = async () => {
+    if (!charge) return
+    setActionLoading(true)
+    try {
+      const res = await paymentService.verifyCharge(charge.id)
+      if (res.updated) {
+        toast.success(
+          `Status atualizado: ${res.previous_status} → ${res.status}` +
+            (res.provider_status ? ` (provedor: ${res.provider_status})` : ''),
+        )
+        load()
+      } else {
+        toast.info(res.message || 'Status conferido no provedor — sem alterações.')
+      }
+    } catch (err) {
+      console.error(err)
+      const msg = (err as any)?.response?.message || 'Erro ao verificar status no provedor.'
+      toast.error(msg)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -175,6 +200,13 @@ export default function PaymentChargeDetail() {
             className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
           >
             <RefreshCw className="w-3.5 h-3.5" /> Verificar status
+          </button>
+          <button
+            onClick={handleVerifyProvider}
+            disabled={actionLoading}
+            className="px-3.5 py-2 text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
+          >
+            <BadgeCheck className="w-3.5 h-3.5" /> Verificar status no provedor
           </button>
           {canManualConfirm && (
             <button
@@ -280,10 +312,44 @@ export default function PaymentChargeDetail() {
                 label="Método"
                 value={paymentMethodLabels[charge.payment_method] || charge.payment_method}
               />
+              {charge.installments > 1 && (
+                <DetailRow
+                  icon={Layers}
+                  label="Parcelamento"
+                  value={`${charge.installments}x de R$ ${formatMoney(charge.installment_value)} no cartão — Total: R$ ${formatMoney(charge.final_amount)}`}
+                />
+              )}
               <DetailRow icon={Calendar} label="Criado em" value={formatDateTime(charge.created)} />
               <DetailRow icon={Calendar} label="Vencimento" value={formatDate(charge.expires_at)} />
               <DetailRow icon={Clock} label="Pago em" value={formatDate(charge.paid_at)} />
             </div>
+
+            {/* Grade de parcelas (quando houver) */}
+            {charge.installments > 1 && (
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
+                  Detalhamento das parcelas
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {Array.from({ length: charge.installments }, (_, i) => i + 1).map((n) => (
+                    <div
+                      key={n}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100"
+                    >
+                      <span className="text-[11px] font-semibold text-slate-500">{n}ª parcela</span>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-slate-800">
+                          R$ {formatMoney(charge.installment_value)}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {charge.status === 'paid' ? 'paga' : 'a pagar'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* PIX */}
             {charge.payment_method === 'pix' && charge.pix_code && (
@@ -371,13 +437,39 @@ export default function PaymentChargeDetail() {
                     - R$ {formatMoney(charge.discount_amount)}
                   </span>
                 </div>
+                {charge.installments > 1 && Number(charge.interest_rate) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Juros parcelamento</span>
+                    <span className="font-semibold text-rose-600">
+                      + R${' '}
+                      {formatMoney(
+                        Math.max(
+                          0,
+                          charge.final_amount - charge.original_amount + charge.discount_amount,
+                        ),
+                      )}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Taxa do provedor</span>
+                  <span className="font-semibold text-rose-600">
+                    - R$ {formatMoney(charge.provider_fee)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Valor líquido</span>
+                  <span className="font-semibold text-indigo-700">
+                    R$ {formatMoney(charge.net_value)}
+                  </span>
+                </div>
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                   <span className="font-semibold text-slate-700">Final</span>
                   <span className="font-bold text-emerald-700 text-base">
                     R$ {formatMoney(charge.final_amount)}
                   </span>
                 </div>
-              </div>
+              </div>{' '}
             </div>
 
             <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">

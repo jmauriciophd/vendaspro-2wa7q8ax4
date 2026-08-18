@@ -45,12 +45,39 @@ export interface PaymentProvider {
   environment: PaymentEnvironment
   methods: PaymentMethod[]
   webhook_configured: boolean
+  webhook_url: string
   last_sync: string
   created: string
   updated: string
   api_key_masked: string
   api_secret_masked: string
   webhook_secret_masked: string
+}
+
+export interface PaymentProviderConfig {
+  provider: 'mercadopago'
+  webhook_url: string
+  instructions: string[]
+}
+
+export interface WebhookTestResult {
+  message: string
+  event_id: string
+  charge_id: string
+  previous_status: ChargeStatus
+  new_status: ChargeStatus
+  fee: number
+  net: number
+}
+
+export interface VerifyChargeResult {
+  id: string
+  status: ChargeStatus
+  previous_status?: ChargeStatus
+  updated: boolean
+  provider_status?: string
+  checked_at: string
+  message?: string
 }
 
 export interface PaymentProviderInput {
@@ -109,6 +136,11 @@ export interface PaymentChargeListItem {
   original_amount: number
   discount_amount: number
   final_amount: number
+  provider_fee: number
+  net_value: number
+  installments: number
+  installment_value: number
+  interest_rate: number
   status: ChargeStatus
   payment_url: string
   pix_code: string
@@ -147,6 +179,7 @@ export interface CreateChargeInput {
   payment_method: PaymentMethod
   discount_amount?: number
   expires_at?: string
+  installments?: number
 }
 
 export interface CreateChargeResult {
@@ -158,6 +191,11 @@ export interface CreateChargeResult {
   original_amount: number
   discount_amount: number
   final_amount: number
+  provider_fee: number
+  net_value: number
+  installments: number
+  installment_value: number
+  interest_rate: number
   payment_url: string
   pix_code: string
   expires_at: string
@@ -243,4 +281,60 @@ export interface ReconciliationData {
     unidentified: number
     partial: number
   }
+}
+
+// ---------------------------------------------------------------------------
+// Relatório Financeiro
+// ---------------------------------------------------------------------------
+export interface FinancialReportSummary {
+  total_cobrado: number
+  total_recebido: number
+  total_taxas: number
+  total_liquido: number
+  total_pendente: number
+  total_vencido: number
+  total_cancelado: number
+}
+
+export interface FinancialReportProvider {
+  provider_id: string
+  provider_name: string
+  total_cobrado: number
+  total_recebido: number
+  total_taxas: number
+  total_liquido: number
+  quantidade_cobrancas: number
+  ticket_medio: number
+  taxa_conversao: number
+}
+
+export interface FinancialReportMonth {
+  month: string
+  cobrado: number
+  recebido: number
+  taxas: number
+  liquido: number
+}
+
+export interface FinancialReportMethod {
+  method: string
+  quantity: number
+  valor_total: number
+  taxa_media: number
+}
+
+export interface FinancialReportTimelineItem {
+  date: string
+  valor: number
+  provider_name: string
+  method: string
+  client: string
+}
+
+export interface FinancialReport {
+  summary: FinancialReportSummary
+  by_provider: FinancialReportProvider[]
+  by_month: FinancialReportMonth[]
+  by_method: FinancialReportMethod[]
+  timeline: FinancialReportTimelineItem[]
 }

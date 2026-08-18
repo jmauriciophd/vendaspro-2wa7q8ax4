@@ -197,6 +197,7 @@ export default function Layout() {
         { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
         { label: 'Relatórios', path: '/relatorios', icon: BarChart3 },
         { label: 'Desempenho', path: '/relatorios/desempenho', icon: TrendingUp },
+        { label: 'Financeiro', path: '/relatorios/financeiro', icon: DollarSign },
         { label: 'Metas', path: '/metas', icon: Target },
         { label: 'Metas por Categoria', path: '/metas/categorias', icon: Target },
         { label: 'Comissões', path: '/comissoes', icon: Percent },

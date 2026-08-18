@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { X, CreditCard, Loader2, ShoppingCart, User, DollarSign } from 'lucide-react'
+import { X, CreditCard, Loader2, ShoppingCart, User, DollarSign, Layers } from 'lucide-react'
 import { toast } from 'sonner'
 import { paymentService, formatMoney } from '@/services/paymentService'
 import type { PaymentProvider, PaymentMethod } from '@/types/payments'
@@ -33,6 +33,7 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
   const [discount, setDiscount] = useState('')
   const [expiresAt, setExpiresAt] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [installments, setInstallments] = useState(1)
 
   useEffect(() => {
     if (isOpen) {
@@ -56,6 +57,7 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
       setExpiresAt(d.toISOString().split('T')[0])
       setDiscount('')
       setMethod('pix')
+      setInstallments(1)
     }
   }, [isOpen])
 
@@ -77,9 +79,32 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
     }
   }, [availableMethods, method])
 
+  // reseta parcelas quando o método muda
+  useEffect(() => {
+    if (method !== 'credit_card') setInstallments(1)
+  }, [method])
+
   const original = sale?.total || 0
   const discountNum = Number(discount || 0)
-  const final = Math.max(0, original - discountNum)
+  const base = Math.max(0, original - discountNum)
+
+  // taxa de juros por parcela (espelha o cálculo do backend — só para preview)
+  const installmentRate = (n: number): number => {
+    if (n <= 1) return 0
+    if (n === 2) return 0.025
+    if (n === 3) return 0.045
+    if (n === 4) return 0.065
+    if (n === 5) return 0.085
+    if (n === 6) return 0.105
+    return 0.125
+  }
+  const interestRate = method === 'credit_card' ? installmentRate(installments) : 0
+  const final = Math.round(base * (1 + interestRate) * 100) / 100
+  const totalInterest = Math.round((final - base) * 100) / 100
+  const installmentValue =
+    installments > 1 && method === 'credit_card'
+      ? Math.round((final / installments) * 100) / 100
+      : final
 
   if (!isOpen || !sale) return null
 
@@ -97,6 +122,7 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
         payment_method: method,
         discount_amount: discountNum || 0,
         expires_at: expires,
+        installments: method === 'credit_card' ? installments : 1,
       })
       toast.success('Cobrança gerada com sucesso!')
       onGenerated?.(res.id)
@@ -212,6 +238,64 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
               )}
             </select>
           </div>
+
+          {/* Parcelamento (somente cartão de crédito) */}
+          {method === 'credit_card' && (
+            <div className="p-3.5 rounded-xl bg-indigo-50/40 border border-indigo-100 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-indigo-600" /> Parcelas
+                </label>
+                <select
+                  value={installments}
+                  onChange={(e) => setInstallments(Number(e.target.value))}
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => {
+                    const rate = installmentRate(n)
+                    const total = Math.round(base * (1 + rate) * 100) / 100
+                    const parcela = n > 1 ? Math.round((total / n) * 100) / 100 : total
+                    const jurosLabel =
+                      n === 1
+                        ? 'à vista'
+                        : rate === 0.125
+                          ? `${n}x de R$ ${formatMoney(parcela)} (juros 12,5%)`
+                          : `${n}x de R$ ${formatMoney(parcela)} (juros ${(rate * 100).toFixed(1)}%)`
+                    return (
+                      <option key={n} value={n}>
+                        {jurosLabel}
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+
+              {installments > 1 && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Valor de cada parcela</span>
+                    <span className="font-semibold text-slate-800">
+                      R$ {formatMoney(installmentValue)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Total parcelado</span>
+                    <span className="font-semibold text-slate-800">R$ {formatMoney(final)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Juros totais</span>
+                    <span className="font-semibold text-rose-600">
+                      R$ {formatMoney(totalInterest)}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 pt-1">
+                    {installments}x de R$ {formatMoney(installmentValue)} (total: R${' '}
+                    {formatMoney(final)} — juros: R$ {formatMoney(totalInterest)})
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Desconto e Vencimento */}
           <div className="grid grid-cols-2 gap-3">

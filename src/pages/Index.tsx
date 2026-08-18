@@ -486,6 +486,7 @@ export default function Index() {
         onImportClients={() => setImportClientsOpen(true)}
         onFunnel={() => navigate('/pipeline-funil')}
         onPerformance={() => navigate('/relatorios/desempenho')}
+        onFinancialReport={() => navigate('/relatorios/financeiro')}
       />
 
       {/* Top Vendedores + Comissões Pendentes (admin/gerente) */}
@@ -940,11 +941,13 @@ function QuickAccessSection({
   onImportClients,
   onFunnel,
   onPerformance,
+  onFinancialReport,
 }: {
   onCommissions: () => void
   onImportClients: () => void
   onFunnel: () => void
   onPerformance: () => void
+  onFinancialReport: () => void
 }) {
   const shortcuts = [
     {
@@ -964,6 +967,14 @@ function QuickAccessSection({
       onClick: onPerformance,
     },
     {
+      label: 'Relatório Financeiro',
+      description: 'Receitas, taxas e valor líquido por provedor',
+      icon: DollarSign,
+      color: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+      hover: 'hover:border-emerald-300 hover:shadow-md',
+      onClick: onFinancialReport,
+    },
+    {
       label: 'Importar Clientes',
       description: 'Cadastre mercadinhos em lote via CSV',
       icon: Upload,
@@ -975,8 +986,8 @@ function QuickAccessSection({
       label: 'Funil de Vendas',
       description: 'Visualize a conversão entre estágios',
       icon: FilterIcon,
-      color: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-      hover: 'hover:border-emerald-300 hover:shadow-md',
+      color: 'bg-amber-50 text-amber-700 border-amber-100',
+      hover: 'hover:border-amber-300 hover:shadow-md',
       onClick: onFunnel,
     },
   ]
@@ -995,7 +1006,7 @@ function QuickAccessSection({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {shortcuts.map((s) => (
           <button
             key={s.label}

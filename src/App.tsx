@@ -25,6 +25,7 @@ import PaymentCharges from './pages/PaymentCharges'
 import PaymentChargeDetail from './pages/PaymentChargeDetail'
 import Reconciliation from './pages/Reconciliation'
 import PaymentSettings from './pages/PaymentSettings'
+import FinancialReport from './pages/FinancialReport'
 import NotFound from './pages/NotFound'
 import { useAuth } from '@/context/AuthContext'
 
@@ -91,6 +92,14 @@ const App = () => (
             />
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/relatorios/desempenho" element={<PerformanceReport />} />
+            <Route
+              path="/relatorios/financeiro"
+              element={
+                <GerenteRoute>
+                  <FinancialReport />
+                </GerenteRoute>
+              }
+            />
             <Route path="/metas" element={<Metas />} />
             <Route path="/metas/categorias" element={<CategoryGoals />} />
             <Route path="/comissoes" element={<Commissions />} />
