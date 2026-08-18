@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-18T00:47:55.767Z",
+  "generatedAt": "2026-08-18T01:12:56.419Z",
   "collections": [
     {
       "name": "users",
@@ -273,11 +273,11 @@
       "name": "deals",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
-        "delete": "@request.auth.id != ''"
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || owner = @request.auth.id)",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || owner = @request.auth.id)",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || owner = @request.auth.id)",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || owner = @request.auth.id)",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || owner = @request.auth.id)"
       },
       "fields": [
         {
@@ -350,11 +350,11 @@
       "name": "sales",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
-        "delete": "@request.auth.id != ''"
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || seller = @request.auth.id)",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || seller = @request.auth.id)",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || seller = @request.auth.id)",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || seller = @request.auth.id)",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || seller = @request.auth.id)"
       },
       "fields": [
         {

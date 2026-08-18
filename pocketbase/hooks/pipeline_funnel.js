@@ -9,7 +9,18 @@ routerAdd(
   'GET',
   '/backend/v1/pipeline/funnel',
   (e) => {
+    if (!e.auth) {
+      return e.json(401, { message: 'Não autenticado.' })
+    }
+
     const query = e.requestInfo().query || {}
+
+    // Isolamento por papel: vendedor só vê os próprios números.
+    // Admin/gerente continuam vendo tudo (e podem usar seller_id para filtrar).
+    const authRole = e.auth.get('role')
+    if (authRole === 'vendedor') {
+      query.seller_id = e.auth.id
+    }
 
     // filtros
     const filters = []

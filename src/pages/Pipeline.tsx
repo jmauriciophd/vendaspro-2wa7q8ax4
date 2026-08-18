@@ -85,7 +85,8 @@ const STAGES: StageColumn[] = [
 ]
 
 export default function Pipeline() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+  const isVendedor = role === 'vendedor'
 
   const [deals, setDeals] = useState<Deal[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -132,11 +133,14 @@ export default function Pipeline() {
   // Filtered deals
   const filteredDeals = useMemo(() => {
     return deals.filter((d) => {
-      if (sellerFilter !== 'all' && d.owner !== sellerFilter) return false
+      // Fallback de isolamento (o backend já filtra via regra por papel).
+      // Vendedor só enxerga os próprios negócios (owner = user.id).
+      if (isVendedor && user && d.owner !== user.id) return false
+      if (!isVendedor && sellerFilter !== 'all' && d.owner !== sellerFilter) return false
       if (customerFilter !== 'all' && d.customer !== customerFilter) return false
       return true
     })
-  }, [deals, sellerFilter, customerFilter])
+  }, [deals, sellerFilter, customerFilter, isVendedor, user])
 
   // Stage totals
   const stageTotals = useMemo(() => {
@@ -231,22 +235,24 @@ export default function Pipeline() {
 
         {/* Filters & Add Button */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Vendedor Filter */}
-          <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
-            <UserIcon className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={sellerFilter}
-              onChange={(e) => setSellerFilter(e.target.value)}
-              className="bg-transparent text-slate-700 font-medium outline-none cursor-pointer"
-            >
-              <option value="all">Todos os Vendedores</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name || u.email}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Vendedor Filter — oculto para vendedor (só vê os próprios) */}
+          {!isVendedor && (
+            <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
+              <UserIcon className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={sellerFilter}
+                onChange={(e) => setSellerFilter(e.target.value)}
+                className="bg-transparent text-slate-700 font-medium outline-none cursor-pointer"
+              >
+                <option value="all">Todos os Vendedores</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name || u.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Cliente Filter */}
           <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs">

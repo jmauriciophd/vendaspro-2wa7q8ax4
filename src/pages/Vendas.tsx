@@ -26,7 +26,8 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { toast } from 'sonner'
 
 export default function Vendas() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+  const isVendedor = role === 'vendedor'
 
   const [sales, setSales] = useState<Sale[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -167,9 +168,18 @@ export default function Vendas() {
 
   useRealtime<Sale>('sales', () => loadData())
 
+  // Fallback de isolamento (o backend já filtra via regra por papel):
+  // vendedor só enxerga as próprias vendas (seller = user.id).
+  const visibleSales = useMemo(() => {
+    if (isVendedor && user) {
+      return sales.filter((s) => s.seller === user.id)
+    }
+    return sales
+  }, [sales, isVendedor, user])
+
   const totalFilteredSales = useMemo(() => {
-    return sales.reduce((acc, curr) => acc + (curr.total || 0), 0)
-  }, [sales])
+    return visibleSales.reduce((acc, curr) => acc + (curr.total || 0), 0)
+  }, [visibleSales])
 
   const handleDeleteSale = async (saleId: string) => {
     if (!confirm('Deseja realmente excluir este registro de venda?')) return
@@ -198,7 +208,7 @@ export default function Vendas() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             Vendas & Pedidos Faturados
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-              {sales.length} vendas
+              {visibleSales.length} vendas
             </span>
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
@@ -235,22 +245,24 @@ export default function Vendas() {
             </select>
           </div>
 
-          {/* Vendedor */}
-          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
-            <UserIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <select
-              value={sellerFilter}
-              onChange={(e) => setSellerFilter(e.target.value)}
-              className="bg-transparent text-slate-700 font-medium outline-none cursor-pointer w-full"
-            >
-              <option value="all">Todos os Vendedores</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name || u.email}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Vendedor — oculto para vendedor (só vê as próprias) */}
+          {!isVendedor && (
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
+              <UserIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <select
+                value={sellerFilter}
+                onChange={(e) => setSellerFilter(e.target.value)}
+                className="bg-transparent text-slate-700 font-medium outline-none cursor-pointer w-full"
+              >
+                <option value="all">Todos os Vendedores</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name || u.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Status */}
           <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
@@ -294,8 +306,8 @@ export default function Vendas() {
         {/* Total Badge */}
         <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
           <span className="text-slate-500">
-            Total filtrado: <strong>{sales.length} vendas</strong>
-          </span>
+            Total filtrado: <strong>{visibleSales.length} vendas</strong>
+          </span>{' '}
           <span className="text-sm font-bold text-slate-900">
             Total: R$ {totalFilteredSales.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </span>
@@ -306,7 +318,7 @@ export default function Vendas() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-xs text-slate-400">Carregando vendas...</div>
-        ) : sales.length === 0 ? (
+        ) : visibleSales.length === 0 ? (
           <div className="p-12 text-center flex flex-col items-center">
             <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
               <ShoppingCart className="w-6 h-6" />
@@ -331,7 +343,7 @@ export default function Vendas() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {sales.map((s) => (
+                {visibleSales.map((s) => (
                   <tr
                     key={s.id}
                     onClick={() => setViewSaleId(s.id)}

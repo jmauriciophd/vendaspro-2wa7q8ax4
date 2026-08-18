@@ -18,6 +18,12 @@ routerAdd(
       return e.json(403, { message: 'Acesso restrito a usuários autenticados.' })
     }
 
+    // Isolamento por papel: vendedor só vê o próprio desempenho.
+    // Admin/gerente continuam vendo o ranking completo.
+    const authRole = e.auth.get('role')
+    const isSeller = authRole !== 'admin' && authRole !== 'gerente'
+    const sellerScope = isSeller ? e.auth.id : ''
+
     const query = e.requestInfo().query || {}
     const now = new Date()
     const year = query.year ? parseInt(query.year, 10) : now.getFullYear()
@@ -138,6 +144,9 @@ routerAdd(
     for (let u = 0; u < users.length; u++) {
       const u_rec = users[u]
       const sid = u_rec.id
+
+      // Isolamento por papel: vendedor só vê a própria linha.
+      if (sellerScope && sid !== sellerScope) continue
       const name = u_rec.get('name') || u_rec.get('email') || 'Vendedor'
       const email = u_rec.get('email') || ''
       const active = u_rec.get('active') !== false

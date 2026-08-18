@@ -90,8 +90,22 @@ const App = () => (
                 </GerenteRoute>
               }
             />
-            <Route path="/relatorios" element={<Relatorios />} />
-            <Route path="/relatorios/desempenho" element={<PerformanceReport />} />
+            <Route
+              path="/relatorios"
+              element={
+                <GerenteRoute>
+                  <Relatorios />
+                </GerenteRoute>
+              }
+            />
+            <Route
+              path="/relatorios/desempenho"
+              element={
+                <GerenteRoute>
+                  <PerformanceReport />
+                </GerenteRoute>
+              }
+            />
             <Route
               path="/relatorios/financeiro"
               element={
@@ -100,10 +114,31 @@ const App = () => (
                 </GerenteRoute>
               }
             />
-            <Route path="/metas" element={<Metas />} />
-            <Route path="/metas/categorias" element={<CategoryGoals />} />
+            <Route
+              path="/metas"
+              element={
+                <GerenteRoute>
+                  <Metas />
+                </GerenteRoute>
+              }
+            />
+            <Route
+              path="/metas/categorias"
+              element={
+                <GerenteRoute>
+                  <CategoryGoals />
+                </GerenteRoute>
+              }
+            />
             <Route path="/comissoes" element={<Commissions />} />
-            <Route path="/pipeline-funil" element={<SalesFunnel />} />
+            <Route
+              path="/pipeline-funil"
+              element={
+                <GerenteRoute>
+                  <SalesFunnel />
+                </GerenteRoute>
+              }
+            />
             <Route path="/notificacoes" element={<Notificacoes />} />
             <Route path="/financeiro/cobrancas" element={<PaymentCharges />} />
             <Route path="/financeiro/cobrancas/:id" element={<PaymentChargeDetail />} />
@@ -118,9 +153,9 @@ const App = () => (
             <Route
               path="/configuracoes/pagamentos"
               element={
-                <GerenteRoute>
+                <AdminRoute>
                   <PaymentSettings />
-                </GerenteRoute>
+                </AdminRoute>
               }
             />
           </Route>
