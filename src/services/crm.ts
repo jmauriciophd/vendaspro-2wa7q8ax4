@@ -386,6 +386,8 @@ export const emailLogService = {
     sale?: string
     doc_type?: EmailDocType
     sent_by?: string
+    attachment_html?: string
+    attachment_filename?: string
   }): Promise<{ status: 'sent' | 'failed'; message: string; error?: string }> {
     try {
       const res = await pb.send('/backend/v1/send-email', {

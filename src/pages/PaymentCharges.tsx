@@ -387,7 +387,7 @@ export default function PaymentCharges() {
                       R$ {formatMoney(c.final_amount)}
                     </td>
                     <td className="py-3 px-4">
-                      <StatusBadge status={c.status} />
+                      <StatusBadge status={c.status} expiresAt={c.expires_at} paidAt={c.paid_at} />
                     </td>
                     <td className="py-3 px-4 text-slate-500">{formatDate(c.expires_at)}</td>
                     <td className="py-3 px-4 text-slate-500">{formatDate(c.paid_at)}</td>
@@ -408,8 +408,16 @@ export default function PaymentCharges() {
   )
 }
 
-// Badge de status compartilhado
-function StatusBadge({ status }: { status: string }) {
+// Badge de status compartilhado — com detecção de situações especiais e tooltips.
+function StatusBadge({
+  status,
+  expiresAt,
+  paidAt,
+}: {
+  status: string
+  expiresAt?: string | null
+  paidAt?: string | null
+}) {
   const labels: Record<string, string> = {
     pending: 'Pendente',
     waiting_payment: 'Aguardando',
@@ -436,9 +444,68 @@ function StatusBadge({ status }: { status: string }) {
     difference: 'bg-orange-50 text-orange-700 border-orange-200',
     partial: 'bg-amber-50 text-amber-700 border-amber-200',
   }
+
+  // tooltips descritivos por status
+  const tooltips: Record<string, string> = {
+    pending: 'Cobrança criada, aguardando processamento.',
+    waiting_payment: 'Link/boleto gerado, aguardando o cliente pagar.',
+    paid: 'Pagamento confirmado dentro do prazo.',
+    expired: 'O prazo de pagamento venceu. Gere um novo boleto/link.',
+    canceled: 'Cobrança cancelada. Se houve pagamento, é preciso reembolsar.',
+    refunded: 'Pagamento devolvido ao cliente.',
+    partially_refunded: 'Reembolso parcial concluído.',
+    failed: 'Falha no processamento da cobrança.',
+    under_review: 'Pagamento em análise antifraude.',
+    difference: 'Valor recebido divergente do cobrado.',
+    partial: 'Pagamento parcial recebido.',
+  }
+
+  // Detecta situação especial: pago após vencimento
+  const paidAfterDue =
+    status === 'paid' &&
+    expiresAt &&
+    paidAt &&
+    new Date(paidAt).getTime() > new Date(expiresAt).getTime()
+
+  if (paidAfterDue) {
+    return (
+      <span
+        title={`Pago após vencimento em ${new Date(paidAt!).toLocaleDateString('pt-BR')}`}
+        className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-amber-50 text-amber-700 border-amber-200 cursor-help"
+      >
+        Pago (atrasado)
+      </span>
+    )
+  }
+
+  // Vencida — chama atenção para gerar novo
+  if (status === 'expired') {
+    return (
+      <span
+        title={tooltips.expired}
+        className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-red-50 text-red-700 border-red-200 cursor-help"
+      >
+        Vencida — gere novo
+      </span>
+    )
+  }
+
+  // Cancelada que tinha pagamento — alerta de reembolso
+  if (status === 'canceled' && paidAt) {
+    return (
+      <span
+        title="Cobrança cancelada, mas houve pagamento. Avalie o reembolso."
+        className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-orange-50 text-orange-700 border-orange-200 cursor-help"
+      >
+        Cancelada (reembolsar?)
+      </span>
+    )
+  }
+
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+      title={tooltips[status] || status}
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-help ${
         colors[status] || 'bg-slate-50 text-slate-700 border-slate-200'
       }`}
     >

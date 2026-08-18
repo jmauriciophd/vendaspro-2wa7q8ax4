@@ -146,6 +146,8 @@ export interface EmailLog extends RecordModel {
   status?: EmailStatus
   error_message?: string
   sent_by?: string
+  attachment_html?: string
+  attachment_filename?: string
   created: string
   updated: string
   expand?: {

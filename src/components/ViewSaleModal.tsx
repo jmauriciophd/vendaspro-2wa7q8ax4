@@ -20,6 +20,8 @@ import {
   Download,
   History,
   ChevronRight,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react'
 import {
   buildNfeHtml,
@@ -29,6 +31,8 @@ import {
   type PromissoriaInstallment,
 } from '@/lib/documents'
 import { GenerateChargeModal } from '@/components/payments/GenerateChargeModal'
+import { paymentService } from '@/services/paymentService'
+import type { PaymentChargeListItem } from '@/types/payments'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 
@@ -49,7 +53,7 @@ const paymentMethodLabel: any = {
 type DocTab = 'nfe' | 'promissoria'
 
 export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, saleId }) => {
-  const { user } = useAuth()
+  const { user, isManager } = useAuth()
   const navigate = useNavigate()
   const [sale, setSale] = useState<Sale | null>(null)
   const [items, setItems] = useState<SaleItem[]>([])
@@ -73,6 +77,10 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
   const [emailDocType, setEmailDocType] = useState<EmailDocType>('nfe')
   const [sendingEmail, setSendingEmail] = useState(false)
 
+  // Cobranças vinculadas à venda (para alertas de estorno/reembolso)
+  const [charges, setCharges] = useState<PaymentChargeListItem[]>([])
+  const [refunding, setRefunding] = useState(false)
+
   const loadSale = async () => {
     if (!saleId) return
     setLoading(true)
@@ -84,6 +92,13 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
       setCompany(comp)
       const logs = await emailLogService.getBySale(saleId)
       setEmailLogs(logs)
+      // carrega cobranças vinculadas (não bloqueia a abertura do modal)
+      try {
+        const ch = await paymentService.listCharges({ sale_id: saleId })
+        setCharges(ch || [])
+      } catch {
+        setCharges([])
+      }
       // prefill email + promissoria
       if (sale.expand?.customer?.email) setEmailTo(sale.expand.customer.email)
       const defaultFirst = new Date()
@@ -255,6 +270,33 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
     setActiveModal('email')
   }
 
+  // Gera o HTML completo do documento selecionado para anexar ao email.
+  const buildDocHtml = (): string | null => {
+    if (!sale || !company) return null
+    if (emailDocType === 'nfe') {
+      return buildNfeHtml({
+        sale,
+        items,
+        customer,
+        company,
+        number: buildNfeNumber(),
+        accessKey: generateAccessKey(),
+        logoUrl: company.logo ? pb.files.getUrl(company, company.logo) : undefined,
+      })
+    }
+    if (total <= 0) return null
+    return buildPromissoriaHtml({
+      sale,
+      customer,
+      company,
+      totalValue: total,
+      installments: generateInstallments(),
+      number: 'NP-' + sale.id.slice(-6).toUpperCase(),
+      emissionDate: new Date().toISOString(),
+      logoUrl: company.logo ? pb.files.getUrl(company, company.logo) : undefined,
+    })
+  }
+
   const sendEmail = async () => {
     if (!sale || !emailTo) {
       toast.error('Informe o email do destinatário.')
@@ -262,6 +304,15 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
     }
     setSendingEmail(true)
     try {
+      // Gera o HTML do documento e o envia como anexo — o cliente recebe o
+      // documento e pode abri-lo / imprimi-lo como PDF.
+      const docHtml = buildDocHtml()
+      const attachmentFilename = docHtml
+        ? emailDocType === 'nfe'
+          ? `nf-e-${buildNfeNumber()}.html`
+          : `nota-promissoria-${sale.id.slice(-6).toUpperCase()}.html`
+        : undefined
+
       const res = await emailLogService.sendEmail({
         to_email: emailTo,
         subject: emailSubject || 'Documento da sua compra',
@@ -269,15 +320,14 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
         sale: sale.id,
         doc_type: emailDocType,
         sent_by: user?.id,
+        attachment_html: docHtml || undefined,
+        attachment_filename: attachmentFilename,
       })
       if (res.status === 'sent') {
-        toast.success('Email enviado com sucesso!')
+        toast.success(`Documento anexado ao email e enviado para ${emailTo}`)
       } else {
         toast.error(res.message || 'Falha ao enviar email.')
       }
-      // Também abre o PDF do documento para o usuário salvar, se desejar
-      if (emailDocType === 'nfe') generateNfe()
-      else generatePromissoria()
       const logs = await emailLogService.getBySale(sale.id)
       setEmailLogs(logs)
       if (res.status === 'sent') setActiveModal(null)
@@ -286,6 +336,34 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
       toast.error('Erro ao enviar email.')
     } finally {
       setSendingEmail(false)
+    }
+  }
+
+  // ---- Estorno / Reembolso ----
+  // Cobra o reembolso de uma cobrança paga vinculada à venda.
+  const handleRefund = async (chargeId: string) => {
+    if (!sale) return
+    if (
+      !confirm(
+        'Confirma o estorno/reembolso desta cobrança paga? Esta ação será registrada na auditoria.',
+      )
+    ) {
+      return
+    }
+    setRefunding(true)
+    try {
+      await paymentService.refund(chargeId, {
+        reason: `Estorno automático — venda cancelada/paga (${sale.id})`,
+      })
+      toast.success('Reembolso solicitado com sucesso.')
+      // recarrega cobranças
+      const ch = await paymentService.listCharges({ sale_id: sale.id })
+      setCharges(ch || [])
+    } catch (err: any) {
+      const msg = err?.response?.message || err?.message || 'Falha ao solicitar reembolso.'
+      toast.error(msg)
+    } finally {
+      setRefunding(false)
     }
   }
 
@@ -358,17 +436,119 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                 </div>
                 <div>
                   <span className="text-slate-400 text-[11px] block text-right">Status:</span>
-                  {sale.payment_status === 'pago' ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <CheckCircle2 className="w-3 h-3" /> Pago
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                      <Clock className="w-3 h-3" /> Pendente
-                    </span>
-                  )}
+                  {(() => {
+                    // Cobrança paga mais recente (para distinguir situações)
+                    const paidCharge = charges.find((c) => c.status === 'paid')
+                    const refundedCharge = charges.find(
+                      (c) => c.status === 'refunded' || c.status === 'partially_refunded',
+                    )
+                    const expiredCharge = charges.find((c) => c.status === 'expired')
+                    const paidAfterDue =
+                      paidCharge &&
+                      paidCharge.expires_at &&
+                      paidCharge.paid_at &&
+                      new Date(paidCharge.paid_at).getTime() >
+                        new Date(paidCharge.expires_at).getTime()
+
+                    if (sale.payment_status === 'pago') {
+                      if (refundedCharge) {
+                        return (
+                          <span
+                            title="Esta cobrança foi reembolsada/estornada."
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-violet-50 text-violet-700 border border-violet-200 cursor-help"
+                          >
+                            <CheckCircle2 className="w-3 h-3" /> Estornado
+                          </span>
+                        )
+                      }
+                      if (paidAfterDue) {
+                        return (
+                          <span
+                            title={`Pago após vencimento em ${new Date(paidCharge!.paid_at).toLocaleDateString('pt-BR')}`}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 cursor-help"
+                          >
+                            <CheckCircle2 className="w-3 h-3" /> Pago (após vencimento)
+                          </span>
+                        )
+                      }
+                      return (
+                        <span
+                          title="Pagamento recebido dentro do prazo."
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-help"
+                        >
+                          <CheckCircle2 className="w-3 h-3" /> Pago
+                        </span>
+                      )
+                    }
+                    if (expiredCharge) {
+                      return (
+                        <span
+                          title="A cobrança venceu — gere um novo boleto/link."
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 border border-red-200 cursor-help"
+                        >
+                          <Clock className="w-3 h-3" /> Cobrança vencida — gere novo boleto
+                        </span>
+                      )
+                    }
+                    return (
+                      <span
+                        title="Aguardando pagamento."
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 cursor-help"
+                      >
+                        <Clock className="w-3 h-3" /> Pendente
+                      </span>
+                    )
+                  })()}
                 </div>
               </div>
+
+              {/* Alerta de reembolso/estorno: venda cancelada/paga ou cobrança paga pendente de estorno */}
+              {(() => {
+                const paidCharge = charges.find((c) => c.status === 'paid')
+                if (!paidCharge) return null
+                // venda cancelada OU (paga mas com cobrança ainda ativa sem reembolso)
+                const isCanceled = (sale as any).status === 'canceled'
+                const needsRefund = isCanceled || sale.payment_status === 'pago'
+                if (!needsRefund) return null
+                return (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs space-y-2">
+                    <div className="flex items-start gap-2 text-red-800">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <div className="flex-1">
+                        <p className="font-semibold">
+                          {isCanceled
+                            ? '⚠️ Este pedido foi cancelado mas o pagamento foi recebido. Um reembolso/estorno precisa ser feito.'
+                            : '⚠️ Esta venda foi paga e possui cobrança ativa. Confirme se há necessidade de estorno.'}
+                        </p>
+                        <p className="text-[11px] text-red-700 mt-0.5">
+                          Cobrança #{paidCharge.external_charge_id} • R${' '}
+                          {(paidCharge.final_amount || 0).toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                          })}{' '}
+                          • Paga em{' '}
+                          {paidCharge.paid_at
+                            ? new Date(paidCharge.paid_at).toLocaleDateString('pt-BR')
+                            : '—'}
+                        </p>
+                      </div>
+                    </div>
+                    {isManager && (
+                      <button
+                        onClick={() => handleRefund(paidCharge.id)}
+                        disabled={refunding}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 rounded-lg transition-colors cursor-pointer"
+                      >
+                        {refunding ? (
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        )}
+                        <span>{refunding ? 'Estornando...' : 'Estornar pagamento'}</span>
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
 
               {/* Items List */}
               <div>
@@ -682,7 +862,8 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                 <div>
                   <h3 className="text-base font-bold text-slate-800">Enviar Documento por Email</h3>
                   <p className="text-xs text-slate-500">
-                    Anexo: {emailDocType === 'nfe' ? 'NF-e' : 'Nota Promissória'} em PDF
+                    Anexo: {emailDocType === 'nfe' ? 'NF-e' : 'Nota Promissória'} (HTML imprimível
+                    como PDF)
                   </p>
                 </div>
               </div>

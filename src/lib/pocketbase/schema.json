@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-18T00:26:37.424Z",
+  "generatedAt": "2026-08-18T00:47:55.767Z",
   "collections": [
     {
       "name": "users",
@@ -1427,6 +1427,36 @@
         {
           "name": "interest_rate",
           "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "boleto_url",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "boleto_barcode",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "boleto_digitable_line",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "boleto_nosso_numero",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "boleto_document_number",
+          "type": "text",
           "required": false,
           "system": false
         }

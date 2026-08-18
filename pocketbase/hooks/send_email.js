@@ -9,6 +9,11 @@
 //   - sale:     string (id da venda, opcional)
 //   - doc_type: string ("nfe" | "promissoria", opcional)
 //   - sent_by:  string (id do usuário, opcional — default auth.id)
+//   - attachment_html:      string (HTML do documento a anexar, opcional)
+//   - attachment_filename:  string (nome do arquivo anexo, opcional)
+//
+// Quando `attachment_html` é informado, o documento é anexado como um arquivo
+// .html (que pode ser aberto e impresso como PDF pelo destinatário).
 //
 // Requer autenticação.
 routerAdd(
@@ -23,6 +28,15 @@ routerAdd(
     const saleId = body.sale ? body.sale.toString() : ''
     const docType = body.doc_type ? body.doc_type.toString() : ''
     const sentBy = body.sent_by ? body.sent_by.toString() : e.auth ? e.auth.id : ''
+    const attachmentHtml = body.attachment_html ? body.attachment_html.toString() : ''
+    let attachmentFilename = body.attachment_filename ? body.attachment_filename.toString() : ''
+    if (attachmentHtml && !attachmentFilename) {
+      attachmentFilename = docType === 'promissoria' ? 'nota-promissoria.html' : 'documento.html'
+    }
+    // garante extensão .html no anexo
+    if (attachmentFilename && attachmentHtml && attachmentFilename.indexOf('.') === -1) {
+      attachmentFilename = attachmentFilename + '.html'
+    }
 
     if (!toEmail) {
       return e.json(400, { message: 'Destinatário (to_email) é obrigatório.' })
@@ -56,6 +70,17 @@ routerAdd(
         to: [{ address: toEmail }],
         subject: subject,
         html: htmlBody,
+        // Anexa o documento (NF-e / Nota Promissória) como HTML, que pode ser
+        // aberto pelo cliente de email e impresso/salvo como PDF.
+        attachments: attachmentHtml
+          ? [
+              {
+                filename: attachmentFilename,
+                content: $security.base64Encode(attachmentHtml),
+                mimeType: 'text/html',
+              },
+            ]
+          : [],
       })
 
       $app.newMailClient().send(message)

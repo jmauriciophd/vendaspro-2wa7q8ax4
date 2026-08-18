@@ -14,6 +14,7 @@ import {
   DollarSign,
   User as UserIcon,
   ChevronRight,
+  AlertTriangle,
 } from 'lucide-react'
 import { saleService, customerService, userService, productService } from '@/services/crm'
 import { paymentService } from '@/services/paymentService'
@@ -43,9 +44,9 @@ export default function Vendas() {
   // Modals
   const [isNewSaleOpen, setIsNewSaleOpen] = useState(false)
   const [viewSaleId, setViewSaleId] = useState<string | null>(null)
-  // mapa sale_id -> { label, badge } do status da cobrança mais recente
+  // mapa sale_id -> { label, badge, tooltip } do status da cobrança mais recente
   const [chargeStatusBySale, setChargeStatusBySale] = useState<
-    Record<string, { label: string; badge: string }>
+    Record<string, { label: string; badge: string; tooltip?: string }>
   >({})
 
   const loadData = async () => {
@@ -96,14 +97,57 @@ export default function Vendas() {
           partially_refunded: 'bg-violet-50 text-violet-700 border-violet-200',
           failed: 'bg-red-50 text-red-700 border-red-200',
         }
-        const map: Record<string, { label: string; badge: string }> = {}
+        // agrupa cobranças por sale_id para detectar situações especiais
+        const bySale: Record<string, typeof charges> = {}
         for (const c of charges) {
-          if (c.sale_id && !map[c.sale_id]) {
-            map[c.sale_id] = {
-              label: 'Cobrança: ' + (statusLabels[c.status] || c.status),
-              badge: statusBadge[c.status] || 'bg-slate-50 text-slate-600 border-slate-200',
+          if (!c.sale_id) continue
+          if (!bySale[c.sale_id]) bySale[c.sale_id] = []
+          bySale[c.sale_id].push(c)
+        }
+        const map: Record<string, { label: string; badge: string; tooltip?: string }> = {}
+        for (const saleId of Object.keys(bySale)) {
+          const list = bySale[saleId]
+          const paid = list.find((c) => c.status === 'paid')
+          const refunded = list.find(
+            (c) => c.status === 'refunded' || c.status === 'partially_refunded',
+          )
+          const expired = list.find((c) => c.status === 'expired')
+          const canceled = list.find((c) => c.status === 'canceled')
+
+          let label = ''
+          let badge = 'bg-slate-50 text-slate-600 border-slate-200'
+          let tooltip = ''
+
+          if (refunded) {
+            label = 'Estornado'
+            badge = 'bg-violet-50 text-violet-700 border-violet-200'
+            tooltip = 'Cobrança reembolsada/estornada.'
+          } else if (paid) {
+            const paidAfterDue =
+              paid.expires_at &&
+              paid.paid_at &&
+              new Date(paid.paid_at).getTime() > new Date(paid.expires_at).getTime()
+            if (paidAfterDue) {
+              label = 'Pago (após vencimento)'
+              badge = 'bg-amber-50 text-amber-700 border-amber-200'
+              tooltip = `Pago após vencimento em ${new Date(paid.paid_at).toLocaleDateString('pt-BR')}.`
+            } else {
+              label = 'Cobrança: ' + (statusLabels[paid.status] || paid.status)
+              badge = statusBadge[paid.status] || badge
+              tooltip = 'Pagamento recebido.'
             }
+          } else if (expired) {
+            label = 'Cobrança vencida — gere novo boleto'
+            badge = 'bg-red-50 text-red-700 border-red-200'
+            tooltip = 'A cobrança venceu. Gere um novo boleto/link de pagamento.'
+          } else {
+            // pega a primeira para label genérico
+            const c = list[0]
+            label = 'Cobrança: ' + (statusLabels[c.status] || c.status)
+            badge = statusBadge[c.status] || badge
+            tooltip = 'Status atual da cobrança.'
           }
+          map[saleId] = { label, badge, tooltip }
         }
         setChargeStatusBySale(map)
       } catch {
@@ -309,22 +353,63 @@ export default function Vendas() {
                       {paymentMethodLabel[s.payment_method] || s.payment_method}
                     </td>
                     <td className="py-3.5 px-4">
-                      {s.payment_status === 'pago' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <CheckCircle2 className="w-3 h-3" /> Pago
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                          <Clock className="w-3 h-3" /> Pendente
-                        </span>
-                      )}
-                      {chargeStatusBySale[s.id] && (
-                        <span
-                          className={`ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${chargeStatusBySale[s.id].badge}`}
-                        >
-                          {chargeStatusBySale[s.id].label}
-                        </span>
-                      )}
+                      {(() => {
+                        const cs = chargeStatusBySale[s.id]
+                        // Se houver situação especial de cobrança, priorize-a
+                        if (cs) {
+                          const isSpecial =
+                            cs.label.indexOf('após vencimento') !== -1 ||
+                            cs.label === 'Estornado' ||
+                            cs.label === 'Reembolso pendente' ||
+                            cs.label.indexOf('vencida') !== -1
+                          if (isSpecial) {
+                            return (
+                              <span
+                                title={cs.tooltip || ''}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border cursor-help ${cs.badge}`}
+                              >
+                                {cs.label.indexOf('vencida') !== -1 ||
+                                cs.label === 'Reembolso pendente' ? (
+                                  <AlertTriangle className="w-3 h-3" />
+                                ) : (
+                                  <CheckCircle2 className="w-3 h-3" />
+                                )}
+                                {cs.label}
+                              </span>
+                            )
+                          }
+                        }
+                        // status padrão da venda
+                        return s.payment_status === 'pago' ? (
+                          <span
+                            title="Pagamento recebido."
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-help"
+                          >
+                            <CheckCircle2 className="w-3 h-3" /> Pago
+                          </span>
+                        ) : (
+                          <span
+                            title="Aguardando pagamento."
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 cursor-help"
+                          >
+                            <Clock className="w-3 h-3" /> Pendente
+                          </span>
+                        )
+                      })()}
+                      {chargeStatusBySale[s.id] &&
+                        !(
+                          chargeStatusBySale[s.id].label.indexOf('após vencimento') !== -1 ||
+                          chargeStatusBySale[s.id].label === 'Estornado' ||
+                          chargeStatusBySale[s.id].label === 'Reembolso pendente' ||
+                          chargeStatusBySale[s.id].label.indexOf('vencida') !== -1
+                        ) && (
+                          <span
+                            title={chargeStatusBySale[s.id].tooltip || ''}
+                            className={`ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold border cursor-help ${chargeStatusBySale[s.id].badge}`}
+                          >
+                            {chargeStatusBySale[s.id].label}
+                          </span>
+                        )}
                     </td>
                     <td className="py-3.5 px-4 text-right font-bold text-slate-900">
                       R$ {s.total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
