@@ -23,8 +23,8 @@ onRecordCreateRequest((e) => {
   const auth = e.auth
   const body = e.requestInfo().body || {}
   const targetEmail = (body.email || '').trim().toLowerCase()
-  const ip = e.realIP() || ''
-  const ua = (e.request.header.get('user-agent') || '').substring(0, 250)
+  const ip = e.requestInfo().remoteIp || ''
+  const ua = (e.requestInfo().headers['user-agent'] || '').substring(0, 250)
 
   // Verifica permissão para criar usuário
   const isSuper = auth && auth.get('is_super_admin') === true
@@ -116,8 +116,8 @@ onRecordUpdateRequest((e) => {
   const auth = e.auth
   const record = e.record
   const body = e.requestInfo().body || {}
-  const ip = e.realIP() || ''
-  const ua = (e.request.header.get('user-agent') || '').substring(0, 250)
+  const ip = e.requestInfo().remoteIp || ''
+  const ua = (e.requestInfo().headers['user-agent'] || '').substring(0, 250)
 
   if (!auth) {
     throw new ForbiddenError('Autenticação necessária.')
@@ -281,8 +281,8 @@ onRecordAfterUpdateSuccess((e) => {
 onRecordDeleteRequest((e) => {
   const auth = e.auth
   const record = e.record
-  const ip = e.realIP() || ''
-  const ua = (e.request.header.get('user-agent') || '').substring(0, 250)
+  const ip = e.requestInfo().remoteIp || ''
+  const ua = (e.requestInfo().headers['user-agent'] || '').substring(0, 250)
 
   // 1. Super Admin nunca pode ser excluído
   const isTargetSuper =
