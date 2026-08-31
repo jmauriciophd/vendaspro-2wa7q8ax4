@@ -372,7 +372,9 @@ routerAdd(
     const rawProvMethods = provider.get('methods') || []
     const provMethods = Array.isArray(rawProvMethods)
       ? rawProvMethods.map(function (m) {
-          return String(m || '').trim().toLowerCase()
+          return String(m || '')
+            .trim()
+            .toLowerCase()
         })
       : []
     let methodOk = false
@@ -514,14 +516,229 @@ routerAdd(
       simulated: true,
     })
 
-    // ---- Boleto: geração real via API do provedor ou simulada ----
-    let boletoUrl = ''
-    let boletoBarcode = ''
-    let boletoLine = ''
-    let boletoNosso = ''
-    let boletoDoc = ''
-    let boletoWarning = ''
-    if (method === 'boleto') {
+    // ---- Credenciais e Payer ----
+    let apiKey = (provider.get('api_key') || '').toString().trim()
+    try {
+      const cfg = $app.findFirstRecordByData('payment_provider_configs', 'provider_id', providerId)
+      if (cfg && cfg.get('api_key')) apiKey = String(cfg.get('api_key')).trim()
+    } catch (_) {}
+    const env = (provider.get('environment') || 'sandbox').toString().toLowerCase()
+    const isRealKey =
+      Boolean(apiKey) &&
+      apiKey.indexOf('DEMO') < 0 &&
+      apiKey.indexOf('demo') < 0 &&
+      (env === 'production' ||
+        apiKey.startsWith('TEST-') ||
+        apiKey.startsWith('APP_USR-') ||
+        apiKey.startsWith('PROD-'))
+
+    let custName = ''
+    let custEmail = ''
+    let custDoc = ''
+    try {
+      const cust = $app.findRecordById('customers', sale.get('customer') || '')
+      custName = cust.get('name') || ''
+      custEmail = cust.get('email') || ''
+      custDoc = cust.get('cnpj') || cust.get('ie') || ''
+    } catch (_) {}
+    const dueDate = rec.get('expires_at') ? String(rec.get('expires_at')).split(' ')[0] : ''
+
+    // ---- Integração Mercado Pago para PIX, BOLETO e LINK ----
+    if (provSlug === 'mercadopago' && isRealKey) {
+      if (method === 'link') {
+        try {
+          const prefBody = {
+            items: [
+              {
+                id: externalId,
+                title: 'Pedido ' + (sale.id ? '#' + sale.id.slice(-6).toUpperCase() : externalId),
+                description: 'Cobrança VendasPro ' + externalId,
+                quantity: 1,
+                currency_id: 'BRL',
+                unit_price: final,
+              },
+            ],
+            payer: {
+              name: custName || 'Cliente',
+              email: custEmail || 'cliente@vendaspro.com',
+            },
+            external_reference: externalId,
+            statement_descriptor: 'VENDASPRO',
+          }
+          if (dueDate) {
+            prefBody.expires = true
+            prefBody.expiration_date_to = dueDate + 'T23:59:59.000Z'
+          }
+          const res = $http.send({
+            url: 'https://api.mercadopago.com/checkout/preferences',
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify(prefBody),
+            timeout: 20,
+          })
+          if (res && res.statusCode >= 200 && res.statusCode < 300) {
+            const pr = res.json || {}
+            const checkoutUrl =
+              env === 'sandbox'
+                ? pr.sandbox_init_point || pr.init_point || ''
+                : pr.init_point || pr.sandbox_init_point || ''
+            if (checkoutUrl) {
+              rec.set('payment_url', checkoutUrl)
+              rec.set('boleto_url', checkoutUrl)
+            }
+            rec.set('provider_response', pr)
+          } else {
+            if (res && res.statusCode === 401) {
+              return e.json(400, {
+                message: 'Credenciais do Mercado Pago inválidas ou expiradas',
+              })
+            }
+            const errDetail =
+              res && res.json && (res.json.message || res.json.error)
+                ? res.json.message || res.json.error
+                : ''
+            const msg = errDetail
+              ? 'Erro no Mercado Pago: ' + errDetail
+              : 'Falha na comunicação com o Mercado Pago (HTTP ' +
+                (res ? res.statusCode : 'sem resposta') +
+                ')'
+            return e.json(400, { message: msg })
+          }
+        } catch (err) {
+          return e.json(400, {
+            message:
+              'Erro ao conectar à API do Mercado Pago: ' +
+              (err && err.message ? err.message : String(err)),
+          })
+        }
+      } else if (method === 'pix') {
+        try {
+          const mpPixBody = {
+            transaction_amount: final,
+            description: 'Cobrança VendasPro ' + externalId,
+            payment_method_id: 'pix',
+            payer: {
+              email: custEmail || 'cliente@vendaspro.com',
+              first_name: custName || 'Cliente',
+            },
+          }
+          if (dueDate) {
+            mpPixBody.date_of_expiration = dueDate + 'T23:59:59.000Z'
+          }
+          const res = $http.send({
+            url: 'https://api.mercadopago.com/v1/payments',
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer ' + apiKey,
+              'Content-Type': 'application/json',
+              'X-Idempotency-Key': externalId,
+            },
+            body: JSON.stringify(mpPixBody),
+            timeout: 20,
+          })
+          if (res && res.statusCode >= 200 && res.statusCode < 300) {
+            const pr = res.json || {}
+            const ppi = (pr.point_of_interaction && pr.point_of_interaction.transaction_data) || {}
+            const qrCode = ppi.qr_code || pr.qr_code || ''
+            const qrCodeBase64 = ppi.qr_code_base64 || ''
+            const ticketUrl =
+              ppi.ticket_url ||
+              (pr.transaction_details && pr.transaction_details.external_resource_url) ||
+              ''
+            if (qrCode) rec.set('pix_code', qrCode)
+            if (qrCodeBase64) rec.set('pix_qrcode', qrCodeBase64)
+            if (ticketUrl) rec.set('payment_url', ticketUrl)
+            rec.set('provider_response', pr)
+          } else {
+            if (res && res.statusCode === 401) {
+              return e.json(400, {
+                message: 'Credenciais do Mercado Pago inválidas ou expiradas',
+              })
+            }
+            const errDetail =
+              res && res.json && (res.json.message || res.json.error)
+                ? res.json.message || res.json.error
+                : ''
+            const msg = errDetail
+              ? 'Erro no Mercado Pago: ' + errDetail
+              : 'Falha na comunicação com o Mercado Pago (HTTP ' +
+                (res ? res.statusCode : 'sem resposta') +
+                ')'
+            return e.json(400, { message: msg })
+          }
+        } catch (err) {
+          return e.json(400, {
+            message:
+              'Erro ao conectar à API do Mercado Pago: ' +
+              (err && err.message ? err.message : String(err)),
+          })
+        }
+      } else if (method === 'boleto') {
+        try {
+          const mpBody = {
+            transaction_amount: final,
+            description: 'Cobranca VendasPro ' + externalId,
+            payment_method_id: 'bolbradesco',
+            date_of_expiration: dueDate ? dueDate + 'T23:59:59.000Z' : undefined,
+            payer: {
+              email: custEmail || 'cliente@vendaspro.com',
+              first_name: custName || 'Cliente',
+            },
+          }
+          const res = $http.send({
+            url: 'https://api.mercadopago.com/v1/payments',
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer ' + apiKey,
+              'Content-Type': 'application/json',
+              'X-Idempotency-Key': externalId,
+            },
+            body: JSON.stringify(mpBody),
+            timeout: 20,
+          })
+          if (res && res.statusCode >= 200 && res.statusCode < 300) {
+            const pr = res.json || {}
+            const td = pr.transaction_details || {}
+            const bUrl = String(td.external_resource_url || '')
+            rec.set('boleto_barcode', String(td.barcode || pr.barcode || ''))
+            rec.set(
+              'boleto_digitable_line',
+              String(td.verification_code || pr.digitable_line || ''),
+            )
+            rec.set('boleto_nosso_numero', String(pr.id || ''))
+            rec.set('boleto_document_number', externalId)
+            rec.set('boleto_url', bUrl)
+            if (bUrl) rec.set('payment_url', bUrl)
+            rec.set('provider_response', pr)
+          } else {
+            if (res && res.statusCode === 401) {
+              return e.json(400, {
+                message: 'Credenciais do Mercado Pago inválidas ou expiradas',
+              })
+            }
+            const errDetail =
+              res && res.json && (res.json.message || res.json.error)
+                ? res.json.message || res.json.error
+                : ''
+            const msg = errDetail
+              ? 'Erro no Mercado Pago: ' + errDetail
+              : 'Falha na comunicação com o Mercado Pago (HTTP ' +
+                (res ? res.statusCode : 'sem resposta') +
+                ')'
+            return e.json(400, { message: msg })
+          }
+        } catch (err) {
+          return e.json(400, {
+            message:
+              'Erro ao conectar à API do Mercado Pago: ' +
+              (err && err.message ? err.message : String(err)),
+          })
+        }
+      }
+    }
+
+    // ---- Boleto para outros provedores ou fallback simulado ----
+    if (method === 'boleto' && !rec.get('boleto_url')) {
       const dv10 = function (seq) {
         let soma = 0
         let peso = 2
@@ -563,88 +780,12 @@ routerAdd(
         }
       }
 
-      const provSlug = provider.get('slug') || ''
-      let apiKey = provider.get('api_key') || ''
-      try {
-        const cfg = $app.findFirstRecordByData(
-          'payment_provider_configs',
-          'provider_id',
-          providerId,
-        )
-        if (cfg && cfg.get('api_key')) apiKey = cfg.get('api_key')
-      } catch (_) {}
-      const env = provider.get('environment') || 'sandbox'
-      const isRealKey =
-        apiKey && env === 'production' && apiKey.indexOf('DEMO') < 0 && apiKey.indexOf('demo') < 0
-
       let boleto = null
       let providerResp = null
-
-      // payer
-      let custName = ''
-      let custEmail = ''
-      let custDoc = ''
-      try {
-        const cust = $app.findRecordById('customers', sale.get('customer') || '')
-        custName = cust.get('name') || ''
-        custEmail = cust.get('email') || ''
-        custDoc = cust.get('cnpj') || cust.get('ie') || ''
-      } catch (_) {}
-      const dueDate = rec.get('expires_at') ? String(rec.get('expires_at')).split(' ')[0] : ''
+      let boletoWarning = ''
 
       if (isRealKey) {
-        if (provSlug === 'mercadopago') {
-          try {
-            const mpBody = {
-              transaction_amount: final,
-              description: 'Cobranca VendasPro ' + externalId,
-              payment_method_id: 'bolbradesco',
-              date_of_expiration: dueDate,
-              payer: { email: custEmail || 'cliente@vendaspro.com', first_name: custName },
-            }
-            const res = $http.send({
-              url: 'https://api.mercadopago.com/v1/payments',
-              method: 'POST',
-              headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-              body: JSON.stringify(mpBody),
-              timeout: 20,
-            })
-            if (res && res.statusCode >= 200 && res.statusCode < 300) {
-              const pr = res.json || {}
-              const td = pr.transaction_details || {}
-              boleto = {
-                barcode: String(td.barcode || pr.barcode || ''),
-                line: String(td.verification_code || pr.digitable_line || ''),
-                nosso: String(pr.id || ''),
-                url: String(td.external_resource_url || ''),
-                doc: externalId,
-              }
-              providerResp = pr
-            } else {
-              if (res && res.statusCode === 401) {
-                return e.json(400, {
-                  message: 'Credenciais do Mercado Pago inválidas ou expiradas',
-                })
-              }
-              const errDetail =
-                res && res.json && (res.json.message || res.json.error)
-                  ? res.json.message || res.json.error
-                  : ''
-              const msg = errDetail
-                ? 'Erro no Mercado Pago: ' + errDetail
-                : 'Falha na comunicação com o Mercado Pago (HTTP ' +
-                  (res ? res.statusCode : 'sem resposta') +
-                  ')'
-              return e.json(400, { message: msg })
-            }
-          } catch (err) {
-            return e.json(400, {
-              message:
-                'Erro ao conectar à API do Mercado Pago: ' +
-                (err && err.message ? err.message : String(err)),
-            })
-          }
-        } else if (provSlug === 'asaas') {
+        if (provSlug === 'asaas') {
           try {
             const asBody = {
               billingType: 'BOLETO',
@@ -733,17 +874,12 @@ routerAdd(
             boletoWarning || (isRealKey ? '' : 'simulado (sandbox ou sem credencial real)'),
         }
       }
-      boletoUrl = boleto.url
-      boletoBarcode = boleto.barcode
-      boletoLine = boleto.line
-      boletoNosso = boleto.nosso
-      boletoDoc = boleto.doc
-      rec.set('boleto_url', boletoUrl)
-      rec.set('boleto_barcode', boletoBarcode)
-      rec.set('boleto_digitable_line', boletoLine)
-      rec.set('boleto_nosso_numero', boletoNosso)
-      rec.set('boleto_document_number', boletoDoc)
-      if (boletoUrl) rec.set('payment_url', boletoUrl)
+      rec.set('boleto_url', boleto.url)
+      rec.set('boleto_barcode', boleto.barcode)
+      rec.set('boleto_digitable_line', boleto.line)
+      rec.set('boleto_nosso_numero', boleto.nosso)
+      rec.set('boleto_document_number', boleto.doc)
+      if (boleto.url) rec.set('payment_url', boleto.url)
       rec.set('provider_response', providerResp)
     }
 
@@ -785,6 +921,7 @@ routerAdd(
       interest_rate: interestRate,
       payment_url: rec.get('payment_url'),
       pix_code: rec.get('pix_code') || '',
+      pix_qrcode: rec.get('pix_qrcode') || '',
       expires_at: rec.get('expires_at') || '',
       created: rec.get('created') || '',
       boleto_url: rec.get('boleto_url') || '',
@@ -3065,14 +3202,20 @@ routerAdd(
     }
 
     const provSlug = provider.get('slug') || ''
-    let apiKey = provider.get('api_key') || ''
+    let apiKey = (provider.get('api_key') || '').toString().trim()
     try {
       const cfg = $app.findFirstRecordByData('payment_provider_configs', 'provider_id', providerId)
-      if (cfg && cfg.get('api_key')) apiKey = cfg.get('api_key')
+      if (cfg && cfg.get('api_key')) apiKey = String(cfg.get('api_key')).trim()
     } catch (_) {}
-    const env = provider.get('environment') || 'sandbox'
+    const env = (provider.get('environment') || 'sandbox').toString().toLowerCase()
     const isRealKey =
-      apiKey && env === 'production' && apiKey.indexOf('DEMO') < 0 && apiKey.indexOf('demo') < 0
+      Boolean(apiKey) &&
+      apiKey.indexOf('DEMO') < 0 &&
+      apiKey.indexOf('demo') < 0 &&
+      (env === 'production' ||
+        apiKey.startsWith('TEST-') ||
+        apiKey.startsWith('APP_USR-') ||
+        apiKey.startsWith('PROD-'))
 
     let boleto = null
     let providerResp = null
