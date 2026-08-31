@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-31T15:53:56.900Z",
+  "generatedAt": "2026-08-31T16:09:09.147Z",
   "collections": [
     {
       "name": "users",
@@ -428,6 +428,44 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "sale_page",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "sale_pages"
+        },
+        {
+          "name": "sale_template",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "page_templates"
+        },
+        {
+          "name": "origin_channel",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "campaign_name",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "shipping_address",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "order_notes",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -2199,6 +2237,565 @@
       "indexes": [
         "CREATE INDEX idx_mail_settings_created ON company_mail_settings (created DESC)",
         "CREATE INDEX idx_mail_settings_enabled ON company_mail_settings (enabled)"
+      ]
+    },
+    {
+      "name": "media_assets",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || uploaded_by = @request.auth.id)",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || uploaded_by = @request.auth.id)"
+      },
+      "fields": [
+        {
+          "name": "title",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "file",
+          "type": "file",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "alt_text",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "file_type",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "file_size",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "uploaded_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_media_assets_uploader ON media_assets (uploaded_by)",
+        "CREATE INDEX idx_media_assets_created ON media_assets (created DESC)"
+      ]
+    },
+    {
+      "name": "page_templates",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || @request.auth.permissions ~ 'templates.create')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || @request.auth.permissions ~ 'templates.edit')",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.permissions ~ 'templates.delete')"
+      },
+      "fields": [
+        {
+          "name": "title",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "slug",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "category",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "catalogo",
+            "oferta",
+            "campanha",
+            "atacado",
+            "promocao",
+            "premium",
+            "produto",
+            "landing_page"
+          ]
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "thumbnail",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "thumbnail_url",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "layout_data",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "settings",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "is_system_default",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "is_active",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_page_templates_slug ON page_templates (slug)",
+        "CREATE INDEX idx_page_templates_category ON page_templates (category)",
+        "CREATE INDEX idx_page_templates_active ON page_templates (is_active)"
+      ]
+    },
+    {
+      "name": "sale_pages",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "status = 'published' || (@request.auth.id != '')",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'gerente' || seller = @request.auth.id || created_by = @request.auth.id)",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || seller = @request.auth.id || created_by = @request.auth.id)"
+      },
+      "fields": [
+        {
+          "name": "title",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "slug",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "access_token",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "type",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["catalogo", "landing_page", "oferta_especial", "link_direto"]
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["draft", "published", "paused", "archived", "expired"]
+        },
+        {
+          "name": "visibility",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["public", "private", "exclusive_customer"]
+        },
+        {
+          "name": "template",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "page_templates"
+        },
+        {
+          "name": "seller",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "target_customer",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "customers"
+        },
+        {
+          "name": "campaign_name",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "end_date",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "layout_data",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "settings",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "seo_title",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "seo_description",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "seo_image",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "custom_css",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "custom_js",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "custom_html",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "views_count",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "orders_count",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sales_total",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "version",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_sale_pages_slug ON sale_pages (slug)",
+        "CREATE UNIQUE INDEX idx_sale_pages_token ON sale_pages (access_token)",
+        "CREATE INDEX idx_sale_pages_seller ON sale_pages (seller)",
+        "CREATE INDEX idx_sale_pages_customer ON sale_pages (target_customer)",
+        "CREATE INDEX idx_sale_pages_status ON sale_pages (status)"
+      ]
+    },
+    {
+      "name": "page_versions",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && @request.auth.role = 'admin'",
+        "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "page",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "sale_pages"
+        },
+        {
+          "name": "template",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "page_templates"
+        },
+        {
+          "name": "version_number",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "layout_data",
+          "type": "json",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "settings",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_page_versions_page ON page_versions (page, version_number DESC)",
+        "CREATE INDEX idx_page_versions_template ON page_versions (template, version_number DESC)"
+      ]
+    },
+    {
+      "name": "page_analytics_events",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "",
+        "update": "@request.auth.id != '' && @request.auth.role = 'admin'",
+        "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "page",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "sale_pages"
+        },
+        {
+          "name": "event_type",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "page_view",
+            "product_click",
+            "add_to_cart",
+            "remove_from_cart",
+            "checkout_step",
+            "order_completed"
+          ]
+        },
+        {
+          "name": "customer",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "customers"
+        },
+        {
+          "name": "seller",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "product_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "device_type",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "referrer",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ip_address",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "user_agent",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "payload",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_analytics_page ON page_analytics_events (page, created DESC)",
+        "CREATE INDEX idx_analytics_seller ON page_analytics_events (seller, created DESC)",
+        "CREATE INDEX idx_analytics_event_type ON page_analytics_events (event_type)"
       ]
     }
   ]

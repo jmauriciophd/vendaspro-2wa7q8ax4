@@ -30,6 +30,11 @@ import Auditoria from './pages/Auditoria'
 import Backups from './pages/Backups'
 import EmailSettings from './pages/EmailSettings'
 import NotFound from './pages/NotFound'
+import { PageBuilder } from './pages/PageBuilder'
+import { TemplatesList } from './pages/TemplatesList'
+import { SellerCatalogs } from './pages/SellerCatalogs'
+import { SalePagesList } from './pages/SalePagesList'
+import { PublicCatalogView } from './pages/PublicCatalogView'
 import { useAuth } from '@/context/AuthContext'
 
 function GerenteRoute({ children }: { children: React.ReactNode }) {
@@ -132,8 +137,21 @@ const App = () => (
         <Sonner position="top-right" richColors />
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* Rotas Públicas de Catálogos e Lojas Autenticadas */}
+          <Route path="/v/:slug" element={<PublicCatalogView />} />
+          <Route path="/catalogo/:slug" element={<PublicCatalogView />} />
+
+          {/* Rota Tela Cheia do Page Builder */}
+          <Route path="/pages/builder/:pageId" element={<PageBuilder />} />
+          <Route path="/pages/builder/new" element={<PageBuilder />} />
+          <Route path="/pages/builder/template/:templateId" element={<PageBuilder />} />
+
           <Route element={<Layout />}>
             <Route path="/" element={<Index />} />
+            <Route path="/meu-dashboard" element={<SellerDashboard />} />
+            <Route path="/seller-catalogs" element={<SellerCatalogs />} />
+            <Route path="/pages" element={<SalePagesList />} />
+            <Route path="/templates" element={<TemplatesList />} />
             <Route path="/meu-dashboard" element={<SellerDashboard />} />
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/clientes" element={<Clientes />} />

@@ -31,6 +31,9 @@ import {
   ShieldAlert,
   Database,
   Mail,
+  Globe,
+  LayoutTemplate,
+  ShoppingBag,
 } from 'lucide-react'
 import { NotificationCenter } from '@/components/notifications/NotificationCenter'
 import { QuickCustomerModal } from '@/components/QuickCustomerModal'
@@ -188,6 +191,8 @@ export default function Layout() {
         { label: 'Clientes', path: '/clientes', icon: Store },
         { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
         { label: 'Produtos', path: '/produtos', icon: Package },
+        { label: 'Meus Catálogos', path: '/seller-catalogs', icon: ShoppingBag },
+        { label: 'Templates', path: '/templates', icon: LayoutTemplate },
         { label: 'Comissões', path: '/comissoes', icon: Percent },
         { label: 'Cobranças', path: '/financeiro/cobrancas', icon: DollarSign },
       ]
@@ -198,6 +203,9 @@ export default function Layout() {
         { label: 'Clientes', path: '/clientes', icon: Store },
         { label: 'Produtos', path: '/produtos', icon: Package },
         { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
+        { label: 'Meus Catálogos', path: '/seller-catalogs', icon: ShoppingBag },
+        { label: 'Páginas de Venda', path: '/pages', icon: Globe },
+        { label: 'Templates de Venda', path: '/templates', icon: LayoutTemplate },
         { label: 'Relatórios', path: '/relatorios', icon: BarChart3 },
         { label: 'Desempenho', path: '/relatorios/desempenho', icon: TrendingUp },
         { label: 'Financeiro', path: '/relatorios/financeiro', icon: DollarSign },
