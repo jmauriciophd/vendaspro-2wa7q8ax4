@@ -113,42 +113,6 @@ routerAdd(
       if (compRecs && compRecs.length > 0) companyRec = compRecs[0]
     } catch (_) {}
 
-    let host = mailRec ? mailRec.getString('smtp_host').trim() : ''
-    let port = mailRec ? mailRec.getInt('smtp_port') || 587 : 587
-    let user = mailRec ? mailRec.getString('smtp_username').trim() : ''
-    let encryptedPass = mailRec ? mailRec.getString('smtp_password') : ''
-    let fromAddr = mailRec ? mailRec.getString('from_address').trim() : ''
-    let fromName = mailRec
-      ? mailRec.getString('from_name').trim()
-      : companyRec
-        ? companyRec.getString('name')
-        : 'VendasPro'
-
-    const masterKey = ($os.getenv('PB_SUPERUSER_TOKEN') || 'vendaspro-app-master-secret-key-375ac')
-      .substring(0, 32)
-      .padEnd(32, '0')
-    let pass = ''
-
-    if (encryptedPass) {
-      try {
-        pass = $security.decrypt(encryptedPass, masterKey)
-      } catch (_) {
-        pass = ''
-      }
-    }
-
-    if (!host || !user || !pass) {
-      return e.json(400, {
-        success: false,
-        message:
-          'O envio de e-mails ainda não está configurado para esta empresa. Entre em Administração → Configurações → E-mail para concluir a configuração.',
-        code: 'SMTP_NOT_CONFIGURED',
-      })
-    }
-
-    if (!fromAddr) fromAddr = user
-    if (!fromName) fromName = 'VendasPro'
-
     const body = e.requestInfo().body || {}
     const targetEmail = (body.to_email || auth.getString('email') || '').trim()
 
@@ -156,6 +120,69 @@ routerAdd(
       return e.json(400, {
         success: false,
         message: 'E-mail de destino para o teste não informado.',
+      })
+    }
+
+    const masterKey = ($os.getenv('PB_SUPERUSER_TOKEN') || 'vendaspro-app-master-secret-key-375ac')
+      .substring(0, 32)
+      .padEnd(32, '0')
+
+    const host =
+      body.smtp_host !== undefined && body.smtp_host !== null
+        ? String(body.smtp_host).trim()
+        : mailRec
+          ? mailRec.getString('smtp_host').trim()
+          : ''
+    const rawPort =
+      body.smtp_port !== undefined && body.smtp_port !== null
+        ? parseInt(body.smtp_port, 10)
+        : mailRec
+          ? mailRec.getInt('smtp_port') || 587
+          : 587
+    const port = isNaN(rawPort) || rawPort <= 0 ? 587 : rawPort
+    const user =
+      body.smtp_username !== undefined && body.smtp_username !== null
+        ? String(body.smtp_username).trim()
+        : mailRec
+          ? mailRec.getString('smtp_username').trim()
+          : ''
+
+    let pass = ''
+    if (
+      body.smtp_password !== undefined &&
+      body.smtp_password !== null &&
+      String(body.smtp_password).trim() !== ''
+    ) {
+      pass = String(body.smtp_password)
+    } else if (mailRec && mailRec.getString('smtp_password')) {
+      try {
+        pass = $security.decrypt(mailRec.getString('smtp_password'), masterKey)
+      } catch (_) {
+        pass = ''
+      }
+    }
+
+    let fromAddr =
+      body.from_address !== undefined && body.from_address !== null
+        ? String(body.from_address).trim()
+        : mailRec
+          ? mailRec.getString('from_address').trim()
+          : ''
+    if (!fromAddr) fromAddr = user || (companyRec ? companyRec.getString('email') : '')
+
+    let fromName =
+      body.from_name !== undefined && body.from_name !== null
+        ? String(body.from_name).trim()
+        : mailRec
+          ? mailRec.getString('from_name').trim()
+          : ''
+    if (!fromName) fromName = companyRec ? companyRec.getString('name') : 'VendasPro'
+
+    if (!host || !user || !pass) {
+      return e.json(400, {
+        success: false,
+        message: 'Preencha Servidor SMTP, Usuário SMTP e Senha antes de realizar o teste.',
+        code: 'SMTP_NOT_CONFIGURED',
       })
     }
 

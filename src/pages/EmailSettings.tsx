@@ -20,6 +20,8 @@ import {
   Lock,
   ArrowLeft,
   Building,
+  ExternalLink,
+  Sparkles,
 } from 'lucide-react'
 
 export default function EmailSettings() {
@@ -161,10 +163,37 @@ export default function EmailSettings() {
       return
     }
 
+    // Se não há senha digitada nem senha previamente configurada
+    if (!smtpPassword.trim() && !passwordConfigured) {
+      toast.error('Digite a senha SMTP antes de realizar o teste.')
+      return
+    }
+    if (!smtpHost.trim()) {
+      toast.error('Informe o Servidor SMTP antes de testar.')
+      return
+    }
+    if (!smtpUsername.trim()) {
+      toast.error('Informe o Usuário SMTP antes de testar.')
+      return
+    }
+
     setIsTesting(true)
     setTestFeedback(null)
     try {
-      const res = await smtpService.testEmail(dest)
+      const credentialsPayload: any = {
+        smtp_host: smtpHost.trim(),
+        smtp_port: Number(smtpPort) || 587,
+        smtp_username: smtpUsername.trim(),
+        security_type: securityType,
+        from_address: fromAddress.trim(),
+        from_name: fromName.trim(),
+        reply_to: replyTo.trim(),
+      }
+      if (smtpPassword.trim() !== '') {
+        credentialsPayload.smtp_password = smtpPassword
+      }
+
+      const res = await smtpService.testEmail(dest, credentialsPayload)
       setTestFeedback(res)
       if (res.success) {
         toast.success(res.message)
@@ -191,6 +220,13 @@ export default function EmailSettings() {
       setIsTesting(false)
     }
   }
+
+  // Verifica se o usuário ou host é do Gmail/Google Workspace
+  const isGmailSetup =
+    smtpHost.toLowerCase().includes('gmail') ||
+    smtpHost.toLowerCase().includes('google') ||
+    smtpUsername.toLowerCase().includes('@gmail.com') ||
+    smtpUsername.toLowerCase().includes('@googlemail.com')
 
   if (!canView) {
     return (
@@ -410,6 +446,40 @@ export default function EmailSettings() {
                     ? 'Deixe em branco para manter a senha salva atual. Digite uma nova apenas se desejar alterá-la.'
                     : 'A senha é criptografada de forma reversível com a chave mestra e nunca exposta em tela ou requisições.'}
                 </p>
+
+                {/* Bloco de Ajuda Especial para Gmail / Senha de App */}
+                <div className="mt-3 p-3 bg-amber-50/80 border border-amber-200/90 rounded-xl text-xs space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-1.5 font-semibold text-amber-900">
+                      <KeyRound className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>Atenção para contas Gmail e Google Workspace:</span>
+                    </div>
+                    <a
+                      href="https://support.google.com/accounts/answer/185833"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 hover:text-indigo-900 hover:underline shrink-0"
+                    >
+                      <span>Como gerar Senha de App</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <p className="text-[11.5px] leading-relaxed text-amber-800/95">
+                    O Google não aceita a senha convencional da sua conta com verificação em 2
+                    etapas ativada (erro{' '}
+                    <code>534 5.7.9 Application-specific password required</code>). É obrigatório
+                    gerar uma <strong>Senha de App (16 caracteres)</strong> em{' '}
+                    <a
+                      href="https://myaccount.google.com/apppasswords"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium underline text-amber-950 hover:text-indigo-800"
+                    >
+                      myaccount.google.com/apppasswords
+                    </a>{' '}
+                    e colá-la no campo acima.
+                  </p>
+                </div>
               </div>
 
               {/* E-mail Remetente */}
@@ -462,12 +532,14 @@ export default function EmailSettings() {
             <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
               <button
                 type="button"
-                disabled={!canTest || !isConfigured}
+                disabled={
+                  !canTest || (!isConfigured && (!smtpHost || !smtpUsername || !smtpPassword))
+                }
                 onClick={() => setShowTestModal(true)}
                 className="w-full sm:w-auto px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
               >
                 <Send className="w-4 h-4 text-slate-600" />
-                <span>Enviar e-mail de teste</span>
+                <span>Testar envio de e-mail</span>
               </button>
 
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
@@ -559,13 +631,37 @@ export default function EmailSettings() {
                     ) : (
                       <XCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     )}
-                    <div>
+                    <div className="space-y-1 flex-1">
                       <p className="font-semibold">{testFeedback.message}</p>
                       {testFeedback.error && (
-                        <p className="text-[11px] font-mono text-rose-300 mt-1">
+                        <p className="text-[11px] font-mono text-rose-300 mt-1 bg-black/30 p-2 rounded break-words">
                           Detalhe técnico: {testFeedback.error}
                         </p>
                       )}
+                      {testFeedback.error &&
+                        (testFeedback.error.includes('534') ||
+                          testFeedback.error.includes('Application-specific password') ||
+                          testFeedback.error.includes('InvalidSecondFactor')) && (
+                          <div className="mt-2 p-2 bg-amber-950/60 border border-amber-500/50 rounded text-amber-200 text-[11px] space-y-1">
+                            <p className="font-semibold flex items-center gap-1 text-amber-300">
+                              <KeyRound className="w-3 h-3 text-amber-400" />
+                              Dica: É necessário usar uma Senha de App do Google.
+                            </p>
+                            <p>
+                              Acesse as configurações de segurança da sua Conta Google e gere uma
+                              senha de 16 dígitos para este app.
+                            </p>
+                            <a
+                              href="https://support.google.com/accounts/answer/185833"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 font-semibold text-indigo-300 hover:text-white underline mt-1"
+                            >
+                              <span>Ver documentação oficial do Google</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -615,11 +711,43 @@ export default function EmailSettings() {
               </div>
 
               {lastTestError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-1">
-                  <span className="font-bold flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Erro no último teste:
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-2">
+                  <span className="font-bold flex items-center gap-1 text-rose-900">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" /> Erro no último
+                    teste:
                   </span>
-                  <p className="font-mono text-[11px] text-rose-700 break-words">{lastTestError}</p>
+                  <p className="font-mono text-[11px] text-rose-700 break-words bg-white/70 p-2 rounded-lg border border-rose-100">
+                    {lastTestError}
+                  </p>
+
+                  {/* Se for o erro 534 do Google ou InvalidSecondFactor, mostrar instrução direta */}
+                  {(lastTestError.includes('534') ||
+                    lastTestError.includes('Application-specific password') ||
+                    lastTestError.includes('InvalidSecondFactor')) && (
+                    <div className="p-2.5 bg-amber-100/70 border border-amber-300 rounded-lg text-amber-950 text-[11px] space-y-1">
+                      <div className="font-bold flex items-center gap-1 text-amber-900">
+                        <KeyRound className="w-3 h-3 text-amber-700" />
+                        Diagnóstico identificado: Senha de App do Google necessária
+                      </div>
+                      <p className="text-amber-900 leading-normal">
+                        O Gmail recusou a conexão porque exige uma <strong>
+                          Senha de App
+                        </strong>{' '}
+                        dedicada.
+                      </p>
+                      <div className="pt-1">
+                        <a
+                          href="https://support.google.com/accounts/answer/185833"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-bold text-indigo-700 hover:text-indigo-900 hover:underline"
+                        >
+                          <span>Guia oficial do Google para gerar Senha de App</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

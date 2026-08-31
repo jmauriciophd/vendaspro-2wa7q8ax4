@@ -417,7 +417,19 @@ export const smtpService = {
   },
 
   /** Executa teste de conectividade e envio de e-mail */
-  async testEmail(toEmail?: string): Promise<{
+  async testEmail(
+    toEmail?: string,
+    credentials?: {
+      smtp_host?: string
+      smtp_port?: number
+      smtp_username?: string
+      smtp_password?: string
+      security_type?: string
+      from_address?: string
+      from_name?: string
+      reply_to?: string
+    },
+  ): Promise<{
     success: boolean
     message: string
     error?: string
@@ -431,7 +443,10 @@ export const smtpService = {
         tested_at?: string
       }>('/backend/v1/settings/email/test', {
         method: 'POST',
-        body: toEmail ? { to_email: toEmail } : {},
+        body: {
+          to_email: toEmail,
+          ...credentials,
+        },
       })
     } catch (err: any) {
       return {
@@ -462,13 +477,25 @@ export const smtpService = {
     }
   },
 
-  async sendTestEmail(toEmail?: string): Promise<{
+  async sendTestEmail(
+    toEmail?: string,
+    credentials?: {
+      smtp_host?: string
+      smtp_port?: number
+      smtp_username?: string
+      smtp_password?: string
+      security_type?: string
+      from_address?: string
+      from_name?: string
+      reply_to?: string
+    },
+  ): Promise<{
     success: boolean
     message: string
     error?: string
     code?: string
   }> {
-    return await this.testEmail(toEmail)
+    return await this.testEmail(toEmail, credentials)
   },
 }
 
