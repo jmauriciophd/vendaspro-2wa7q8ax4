@@ -15,24 +15,20 @@ import {
 import { toast } from 'sonner'
 
 export default function Login() {
-  const { login, register, user } = useAuth()
+  const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('jmauriciophd@gmail.com')
-  const [password, setPassword] = useState('Skip@Pass')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isResetting, setIsResetting] = useState(false)
 
   // Field validation errors
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
   const validate = () => {
     const errs: { [key: string]: string } = {}
-    if (mode === 'register' && !name.trim()) {
-      errs.name = 'Nome completo é obrigatório'
-    }
     if (!email.trim()) {
       errs.email = 'E-mail é obrigatório'
     } else if (!/\S+@\S+\.\S+/.test(email)) {
@@ -47,19 +43,32 @@ export default function Login() {
     return Object.keys(errs).length === 0
   }
 
+  const handlePasswordReset = async () => {
+    if (!email.trim()) {
+      setErrors({ email: 'Informe seu e-mail para receber as instruções de redefinição.' })
+      toast.error('Informe seu e-mail para solicitar a recuperação de senha.')
+      return
+    }
+    setIsResetting(true)
+    try {
+      await pb.collection('users').requestPasswordReset(email.trim())
+      toast.success('Instruções de redefinição enviadas para o seu e-mail!')
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err?.data?.message || 'Erro ao solicitar redefinição de senha.')
+    } finally {
+      setIsResetting(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!validate()) return
 
     setIsLoading(true)
     try {
-      if (mode === 'login') {
-        await login(email.trim(), password)
-        toast.success('Login realizado com sucesso!')
-      } else {
-        await register(name.trim(), email.trim(), password)
-        toast.success('Conta criada com sucesso!')
-      }
+      await login(email.trim(), password)
+      toast.success('Login realizado com sucesso!')
       const fromRaw = (location.state as { from?: { pathname?: string } })?.from?.pathname
       // Redirecionamento por role: vendedor -> /meu-dashboard; demais -> / (ou from explícito)
       const loggedInUser = pb.authStore.record as { role?: string } | null
@@ -105,71 +114,16 @@ export default function Login() {
         </div>
 
         <div className="mb-6">
-          <h2 className="text-lg font-semibold text-slate-800">
-            {mode === 'login' ? 'Bem-vindo de volta' : 'Criar nova conta comercial'}
-          </h2>
+          <h2 className="text-lg font-semibold text-slate-800">Acesso ao Sistema</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            {mode === 'login'
-              ? 'Insira suas credenciais para acessar o painel'
-              : 'Preencha seus dados para começar a gerenciar vendas'}
+            Insira suas credenciais corporativas para acessar o painel
           </p>
         </div>
 
-        {/* Credentials helper banner */}
-        {mode === 'login' && (
-          <div className="mb-5 p-3 rounded-xl bg-indigo-50/80 border border-indigo-100 flex items-start gap-2.5 text-xs text-indigo-900">
-            <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-semibold block text-indigo-950">Acesso de Demonstração:</span>
-              <span>
-                E-mail:{' '}
-                <strong className="font-mono text-indigo-700">jmauriciophd@gmail.com</strong>
-              </span>
-              <br />
-              <span>
-                Senha: <strong className="font-mono text-indigo-700">Skip@Pass</strong>
-              </span>
-            </div>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === 'register' && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Nome Completo
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <UserIcon className="w-4 h-4" />
-                </div>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value)
-                    if (errors.name) setErrors((prev) => ({ ...prev, name: '' }))
-                  }}
-                  placeholder="Ex: João Maurício"
-                  className={`w-full pl-10 pr-4 py-2.5 bg-white text-sm text-slate-900 border rounded-xl outline-none transition-all ${
-                    errors.name
-                      ? 'border-red-500 focus:ring-2 focus:ring-red-200'
-                      : 'border-slate-200 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100'
-                  }`}
-                />
-              </div>
-              {errors.name && (
-                <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  {errors.name}
-                </p>
-              )}
-            </div>
-          )}
-
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              E-mail Comercial
+              E-mail Corporativo
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -201,19 +155,14 @@ export default function Login() {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-semibold text-slate-700">Senha</label>
-              {mode === 'login' && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    toast.info(
-                      'Para redefinir a senha do usuário demo, utilize a credencial padrão Skip@Pass.',
-                    )
-                  }
-                  className="text-xs text-indigo-600 hover:text-indigo-700 font-medium hover:underline"
-                >
-                  Esqueceu sua senha?
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={isResetting}
+                onClick={handlePasswordReset}
+                className="text-xs text-indigo-600 hover:text-indigo-700 font-medium hover:underline disabled:opacity-50"
+              >
+                {isResetting ? 'Enviando...' : 'Esqueceu sua senha?'}
+              </button>
             </div>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -251,7 +200,7 @@ export default function Login() {
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
-                <span>{mode === 'login' ? 'Entrar no Sistema' : 'Cadastrar e Entrar'}</span>
+                <span>Entrar no Sistema</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -259,35 +208,9 @@ export default function Login() {
         </form>
 
         <div className="mt-6 pt-5 border-t border-slate-100 text-center">
-          {mode === 'login' ? (
-            <p className="text-xs text-slate-600">
-              Não possui uma conta?{' '}
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('register')
-                  setErrors({})
-                }}
-                className="text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
-              >
-                Criar conta
-              </button>
-            </p>
-          ) : (
-            <p className="text-xs text-slate-600">
-              Já tem cadastro?{' '}
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('login')
-                  setErrors({})
-                }}
-                className="text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
-              >
-                Fazer login
-              </button>
-            </p>
-          )}
+          <p className="text-xs text-slate-500">
+            A criação e gestão de acessos é restrita à administração da empresa.
+          </p>
         </div>
       </div>
     </div>

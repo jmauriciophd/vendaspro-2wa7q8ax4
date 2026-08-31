@@ -8,7 +8,6 @@ interface AuthContextType {
   user: User | null
   isLoading: boolean
   login: (email: string, pass: string) => Promise<void>
-  register: (name: string, email: string, pass: string) => Promise<void>
   logout: () => void
   refreshUser: () => void
   role: Role
@@ -50,18 +49,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(authData.record)
   }
 
-  const register = async (name: string, email: string, pass: string) => {
-    await pb.collection('users').create({
-      name,
-      email,
-      password: pass,
-      passwordConfirm: pass,
-      emailVisibility: true,
-    })
-    // Automatic login after register
-    await login(email, pass)
-  }
-
   const logout = () => {
     pb.authStore.clear()
     setUser(null)
@@ -84,7 +71,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         isLoading,
         login,
-        register,
         logout,
         refreshUser,
         role,

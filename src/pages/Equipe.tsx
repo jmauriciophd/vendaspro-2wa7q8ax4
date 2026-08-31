@@ -87,6 +87,10 @@ export default function Equipe() {
       toast.error('Você não pode excluir seu próprio usuário.')
       return
     }
+    if (u.email === 'jmauriciophd@gmail.com') {
+      toast.error('O administrador principal não pode ser excluído.')
+      return
+    }
     if (!confirm(`Deseja realmente excluir o usuário "${u.name || u.email}"?`)) return
     try {
       await userService.delete(u.id)
@@ -208,6 +212,7 @@ export default function Equipe() {
                   const cfg = roleConfig[u.role || 'vendedor']
                   const RoleIcon = cfg.icon
                   const isSelf = u.id === currentUser?.id
+                  const isMainAdminTarget = u.email === 'jmauriciophd@gmail.com'
                   return (
                     <tr key={u.id} className="hover:bg-slate-50/70 transition-colors group">
                       <td className="py-3.5 px-4 font-bold text-slate-900">
@@ -262,17 +267,19 @@ export default function Equipe() {
                       {isAdmin && (
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => {
-                                setUserToEdit(u)
-                                setIsModalOpen(true)
-                              }}
-                              title="Editar usuário"
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            {!isSelf && (
+                            {(!isMainAdminTarget || isSelf) && (
+                              <button
+                                onClick={() => {
+                                  setUserToEdit(u)
+                                  setIsModalOpen(true)
+                                }}
+                                title="Editar usuário"
+                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {!isSelf && !isMainAdminTarget && (
                               <button
                                 onClick={() => handleDelete(u)}
                                 title="Excluir usuário"
@@ -468,8 +475,13 @@ const UserModal: React.FC<UserModalProps> = ({ userToEdit, onClose, onSaved }) =
               <label className="block text-xs font-semibold text-slate-700 mb-1">Papel *</label>
               <select
                 value={role}
+                disabled={userToEdit?.email === 'jmauriciophd@gmail.com'}
                 onChange={(e) => setRole(e.target.value as UserRole)}
-                className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+                className={`w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none ${
+                  userToEdit?.email === 'jmauriciophd@gmail.com'
+                    ? 'opacity-60 cursor-not-allowed'
+                    : ''
+                }`}
               >
                 <option value="admin">Admin (acesso total)</option>
                 <option value="gerente">Gerente (relatórios/equipe)</option>
@@ -480,8 +492,13 @@ const UserModal: React.FC<UserModalProps> = ({ userToEdit, onClose, onSaved }) =
               <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
               <select
                 value={active ? 'true' : 'false'}
+                disabled={userToEdit?.email === 'jmauriciophd@gmail.com'}
                 onChange={(e) => setActive(e.target.value === 'true')}
-                className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+                className={`w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none ${
+                  userToEdit?.email === 'jmauriciophd@gmail.com'
+                    ? 'opacity-60 cursor-not-allowed'
+                    : ''
+                }`}
               >
                 <option value="true">Ativo</option>
                 <option value="false">Inativo</option>
