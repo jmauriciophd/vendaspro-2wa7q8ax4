@@ -108,6 +108,10 @@ export interface ElementStyles {
 
   // Posicionamento e Visibilidade
   position?: 'static' | 'relative' | 'absolute' | 'fixed' | 'sticky'
+  top?: string
+  right?: string
+  bottom?: string
+  left?: string
   zIndex?: number
   opacity?: number
   visibilityDesktop?: boolean
