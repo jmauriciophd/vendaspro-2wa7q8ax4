@@ -29,6 +29,10 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<Role, AppPermission[]> = {
     'payments.refund',
     'payments.reconcile',
     'payments.providers.manage',
+    'backups.view',
+    'backups.create',
+    'backups.download',
+    'backups.settings',
   ],
   gerente: [
     'users.view',

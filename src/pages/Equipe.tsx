@@ -406,6 +406,17 @@ const PERMISSION_MODULES = [
       { key: 'payments.providers.manage', label: 'Configurar gateways de pagamento' },
     ],
   },
+  {
+    module: 'Backup & Banco de Dados',
+    permissions: [
+      { key: 'backups.view', label: 'Visualizar lista e status dos backups' },
+      { key: 'backups.create', label: 'Gerar novos backups manuais' },
+      { key: 'backups.download', label: 'Download de arquivos de backup' },
+      { key: 'backups.settings', label: 'Configurar retenção e automação' },
+      { key: 'backups.restore', label: 'Restaurar banco de dados (Crítico)' },
+      { key: 'backups.delete', label: 'Excluir backups permanentemente' },
+    ],
+  },
 ]
 
 const UserModal: React.FC<UserModalProps> = ({ userToEdit, onClose, onSaved }) => {

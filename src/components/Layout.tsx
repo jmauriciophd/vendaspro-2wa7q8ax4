@@ -29,6 +29,7 @@ import {
   Scale,
   CreditCard,
   ShieldAlert,
+  Database,
 } from 'lucide-react'
 import { NotificationCenter } from '@/components/notifications/NotificationCenter'
 import { QuickCustomerModal } from '@/components/QuickCustomerModal'
@@ -211,6 +212,9 @@ export default function Layout() {
           : []),
         ...(isAdmin || can('audit.view')
           ? [{ label: 'Auditoria', path: '/auditoria', icon: ShieldAlert }]
+          : []),
+        ...(isAdmin || can('backups.view')
+          ? [{ label: 'Backups', path: '/configuracoes/backups', icon: Database }]
           : []),
       ]
 

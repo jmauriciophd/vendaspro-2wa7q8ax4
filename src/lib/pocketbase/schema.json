@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-31T14:31:58.351Z",
+  "generatedAt": "2026-08-31T14:41:51.255Z",
   "collections": [
     {
       "name": "users",
@@ -1872,6 +1872,222 @@
         "CREATE INDEX idx_audit_logs_module ON audit_logs (module)",
         "CREATE INDEX idx_audit_logs_result ON audit_logs (result)"
       ]
+    },
+    {
+      "name": "database_backups",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "filename",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "backup_file",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "size",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "checksum",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "database_type",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "backup_type",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["manual", "automatic", "pre_restore_safety"]
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pending", "processing", "completed", "failed", "restored"]
+        },
+        {
+          "name": "created_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "completed_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "restored_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "error_message",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "collections_included",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "records_count",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "is_protected",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "retention_days",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_database_backups_created ON database_backups (created DESC)",
+        "CREATE INDEX idx_database_backups_status ON database_backups (status)",
+        "CREATE INDEX idx_database_backups_type ON database_backups (backup_type)",
+        "CREATE INDEX idx_database_backups_creator ON database_backups (created_by)"
+      ]
+    },
+    {
+      "name": "database_backup_settings",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "auto_backup_enabled",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "frequency",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["daily", "weekly", "monthly"]
+        },
+        {
+          "name": "execution_time",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "retention_days",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "max_backups_kept",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "include_audit_logs",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "last_run_at",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "last_run_status",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "updated_by",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
     }
   ]
 }

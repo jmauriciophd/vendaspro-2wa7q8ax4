@@ -207,6 +207,7 @@ export default function Auditoria() {
               <option value="all">Todos os módulos</option>
               <option value="users">Equipe & Usuários</option>
               <option value="auth">Autenticação & Segurança</option>
+              <option value="backups">Backup & Banco de Dados</option>
               <option value="commissions">Comissões</option>
               <option value="settings">Configurações</option>
               <option value="payments">Pagamentos</option>

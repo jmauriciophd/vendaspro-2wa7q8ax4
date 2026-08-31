@@ -124,6 +124,51 @@ export type AppPermission =
   | 'payments.refund'
   | 'payments.reconcile'
   | 'payments.providers.manage'
+  | 'backups.view'
+  | 'backups.create'
+  | 'backups.download'
+  | 'backups.restore'
+  | 'backups.delete'
+  | 'backups.settings'
+
+export type BackupType = 'manual' | 'automatic' | 'pre_restore_safety'
+export type BackupStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'restored'
+
+export interface DatabaseBackup {
+  id: string
+  filename: string
+  size: number
+  checksum: string
+  database_type: string
+  backup_type: BackupType
+  status: BackupStatus
+  created_by?: string
+  created_by_name?: string
+  created_by_email?: string
+  completed_at?: string
+  restored_at?: string
+  error_message?: string
+  collections_included?: Array<{ name: string; count: number }>
+  records_count: number
+  is_protected?: boolean
+  retention_days?: number
+  notes?: string
+  created: string
+  updated: string
+}
+
+export interface DatabaseBackupSettings {
+  id?: string
+  auto_backup_enabled: boolean
+  frequency: 'daily' | 'weekly' | 'monthly'
+  execution_time: string
+  retention_days: number
+  max_backups_kept: number
+  include_audit_logs: boolean
+  last_run_at?: string
+  last_run_status?: string
+  updated?: string
+}
 
 export interface User extends RecordModel {
   id: string

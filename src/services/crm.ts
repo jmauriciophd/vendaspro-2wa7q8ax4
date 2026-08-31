@@ -568,6 +568,110 @@ export const salesTargetService = {
   },
 }
 
+export const backupService = {
+  /** Listar backups com paginação */
+  async getAll(params?: { page?: number; limit?: number }) {
+    const query = new URLSearchParams()
+    if (params?.page) query.set('page', String(params.page))
+    if (params?.limit) query.set('limit', String(params.limit))
+    const qStr = query.toString() ? `?${query.toString()}` : ''
+    return await pb.send<{
+      items: import('@/types/crm').DatabaseBackup[]
+      totalItems: number
+      page: number
+      limit: number
+    }>(`/backend/v1/backups${qStr}`, {
+      method: 'GET',
+    })
+  },
+
+  /** Criar novo backup manual */
+  async create(data?: {
+    notes?: string
+    is_protected?: boolean
+    backup_type?: 'manual' | 'automatic'
+  }) {
+    return await pb.send<{
+      success: boolean
+      message: string
+      backup: {
+        id: string
+        filename: string
+        size: number
+        checksum: string
+        records_count: number
+        status: string
+        created: string
+      }
+    }>('/backend/v1/backups', {
+      method: 'POST',
+      body: data || {},
+    })
+  },
+
+  /** Solicitar URL de download seguro de backup */
+  async getDownloadUrl(id: string) {
+    return await pb.send<{
+      download_url: string
+      filename: string
+      size: number
+      checksum: string
+    }>(`/backend/v1/backups/${id}/download`, {
+      method: 'GET',
+    })
+  },
+
+  /** Restaurar banco de dados a partir de backup (requer confirmação explícita "RESTAURAR") */
+  async restore(id: string, confirmation: string) {
+    return await pb.send<{
+      success: boolean
+      message: string
+      summary: {
+        backup_id: string
+        filename: string
+        records_restored: number
+        collections_restored: number
+        safety_backup_id?: string
+      }
+    }>(`/backend/v1/backups/${id}/restore`, {
+      method: 'POST',
+      body: { confirmation },
+    })
+  },
+
+  /** Excluir backup físico permanentemente */
+  async delete(id: string) {
+    return await pb.send<{
+      success: boolean
+      message: string
+    }>(`/backend/v1/backups/${id}`, {
+      method: 'DELETE',
+    })
+  },
+
+  /** Obter configurações de automação e retenção */
+  async getSettings() {
+    return await pb.send<import('@/types/crm').DatabaseBackupSettings>(
+      '/backend/v1/backups/settings',
+      {
+        method: 'GET',
+      },
+    )
+  },
+
+  /** Salvar configurações de automação e retenção */
+  async saveSettings(data: Partial<import('@/types/crm').DatabaseBackupSettings>) {
+    return await pb.send<{
+      success: boolean
+      message: string
+      settings: import('@/types/crm').DatabaseBackupSettings
+    }>('/backend/v1/backups/settings', {
+      method: 'POST',
+      body: data,
+    })
+  },
+}
+
 export const reminderService = {
   /** Lembretes pendentes de um usuário, ordenados por vencimento. */
   async getPending(userId: string) {
