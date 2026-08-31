@@ -390,8 +390,11 @@ const PERMISSION_MODULES = [
   {
     module: 'Configurações do Sistema',
     permissions: [
-      { key: 'settings.view', label: 'Visualizar dados fiscais e SMTP' },
-      { key: 'settings.edit', label: 'Editar configurações e testar SMTP' },
+      { key: 'settings.view', label: 'Visualizar dados fiscais da empresa' },
+      { key: 'settings.edit', label: 'Editar dados fiscais da empresa' },
+      { key: 'settings.email.view', label: 'Visualizar configurações de E-mail / SMTP' },
+      { key: 'settings.email.edit', label: 'Alterar configurações de E-mail / SMTP' },
+      { key: 'settings.email.test', label: 'Executar teste de conexão de E-mail / SMTP' },
     ],
   },
   {

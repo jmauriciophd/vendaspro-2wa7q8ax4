@@ -117,6 +117,9 @@ export type AppPermission =
   | 'reports.export'
   | 'settings.view'
   | 'settings.edit'
+  | 'settings.email.view'
+  | 'settings.email.edit'
+  | 'settings.email.test'
   | 'payments.view'
   | 'payments.create'
   | 'payments.send'
@@ -130,6 +133,30 @@ export type AppPermission =
   | 'backups.restore'
   | 'backups.delete'
   | 'backups.settings'
+
+export type SmtpSecurityType = 'tls' | 'ssl' | 'starttls' | 'none'
+export type SmtpTestStatus = 'none' | 'success' | 'failed'
+
+export interface CompanyMailSettings {
+  id?: string
+  company?: string
+  smtp_host: string
+  smtp_port: number
+  smtp_username: string
+  smtp_password?: string
+  smtp_password_configured?: boolean
+  security_type: SmtpSecurityType
+  from_address: string
+  from_name: string
+  reply_to?: string
+  enabled: boolean
+  is_configured?: boolean
+  last_test_status?: SmtpTestStatus
+  last_tested_at?: string
+  last_test_error?: string
+  created?: string
+  updated?: string
+}
 
 export type BackupType = 'manual' | 'automatic' | 'pre_restore_safety'
 export type BackupStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'restored'

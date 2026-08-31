@@ -30,6 +30,7 @@ import {
   CreditCard,
   ShieldAlert,
   Database,
+  Mail,
 } from 'lucide-react'
 import { NotificationCenter } from '@/components/notifications/NotificationCenter'
 import { QuickCustomerModal } from '@/components/QuickCustomerModal'
@@ -209,6 +210,9 @@ export default function Layout() {
         ...(isManager ? [{ label: 'Equipe', path: '/equipe', icon: Users }] : []),
         ...(isAdmin
           ? [{ label: 'Pagamentos', path: '/configuracoes/pagamentos', icon: CreditCard }]
+          : []),
+        ...(isAdmin || can('settings.email.view') || can('settings.view')
+          ? [{ label: 'E-mail / SMTP', path: '/configuracoes/email', icon: Mail }]
           : []),
         ...(isAdmin || can('audit.view')
           ? [{ label: 'Auditoria', path: '/auditoria', icon: ShieldAlert }]

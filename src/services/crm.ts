@@ -393,11 +393,66 @@ export const auditLogService = {
 }
 
 export const smtpService = {
+  /** Obtém configurações de SMTP para visualização (sem a senha em texto puro) */
+  async getSettings(): Promise<import('@/types/crm').CompanyMailSettings> {
+    return await pb.send<import('@/types/crm').CompanyMailSettings>('/backend/v1/settings/email', {
+      method: 'GET',
+    })
+  },
+
+  /** Salva/atualiza as configurações de SMTP da empresa */
+  async saveSettings(data: Partial<import('@/types/crm').CompanyMailSettings>): Promise<{
+    success: boolean
+    message: string
+    settings: import('@/types/crm').CompanyMailSettings
+  }> {
+    return await pb.send<{
+      success: boolean
+      message: string
+      settings: import('@/types/crm').CompanyMailSettings
+    }>('/backend/v1/settings/email', {
+      method: 'PUT',
+      body: data,
+    })
+  },
+
+  /** Executa teste de conectividade e envio de e-mail */
+  async testEmail(toEmail?: string): Promise<{
+    success: boolean
+    message: string
+    error?: string
+    tested_at?: string
+  }> {
+    try {
+      return await pb.send<{
+        success: boolean
+        message: string
+        error?: string
+        tested_at?: string
+      }>('/backend/v1/settings/email/test', {
+        method: 'POST',
+        body: toEmail ? { to_email: toEmail } : {},
+      })
+    } catch (err: any) {
+      return {
+        success: false,
+        message:
+          err?.data?.message ||
+          err?.message ||
+          'Não foi possível enviar o e-mail. Verifique servidor, porta, usuário, senha e protocolo de segurança.',
+        error: err?.data?.error,
+      }
+    }
+  },
+
   async getStatus(): Promise<{
     configured: boolean
+    enabled?: boolean
     host: string
     port: string
     from: string
+    last_test_status?: string
+    last_tested_at?: string
   }> {
     try {
       const res = await pb.send('/backend/v1/smtp/status', { method: 'GET' })
@@ -413,20 +468,7 @@ export const smtpService = {
     error?: string
     code?: string
   }> {
-    try {
-      const res = await pb.send('/backend/v1/smtp/test', {
-        method: 'POST',
-        body: toEmail ? { to_email: toEmail } : {},
-      })
-      return res
-    } catch (err: any) {
-      return {
-        success: false,
-        message: err?.data?.message || err?.message || 'Falha ao testar conexão SMTP.',
-        error: err?.data?.error,
-        code: err?.data?.code,
-      }
-    }
+    return await this.testEmail(toEmail)
   },
 }
 

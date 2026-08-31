@@ -604,15 +604,55 @@ routerAdd(
             '<p style="margin: 0; font-size: 12px; color: #94a3b8;">Notificação transacional automática gerada pelo VendasPro.</p>' +
             '</div>'
 
-          // Configura SMTP a partir das variáveis de ambiente
-          const host = ($os.getenv('SMTP_HOST') || '').trim()
-          const port = parseInt($os.getenv('SMTP_PORT') || '587', 10)
-          const user = ($os.getenv('SMTP_USER') || '').trim()
-          const pass = ($os.getenv('SMTP_PASSWORD') || '').trim()
-          const fromAddr = ($os.getenv('SMTP_FROM') || user || 'noreply@vendaspro.com').trim()
+          // Busca configuração SMTP dinamicamente do banco de dados (painel administrativo)
+          let mailRec = null
+          try {
+            const recs = $app.findRecordsByFilter('company_mail_settings', '1=1', '-created', 1, 0)
+            if (recs && recs.length > 0) mailRec = recs[0]
+          } catch (_) {}
 
-          if (!host || !user || !pass) {
-            emailSendErr = 'SMTP_NOT_CONFIGURED: Servidor SMTP não configurado.'
+          let companyRec = null
+          try {
+            const compRecs = $app.findRecordsByFilter('company_settings', '1=1', 'created', 1, 0)
+            if (compRecs && compRecs.length > 0) companyRec = compRecs[0]
+          } catch (_) {}
+
+          const host = mailRec ? mailRec.getString('smtp_host').trim() : ''
+          const port = mailRec ? mailRec.getInt('smtp_port') || 587 : 587
+          const user = mailRec ? mailRec.getString('smtp_username').trim() : ''
+          const encryptedPass = mailRec ? mailRec.getString('smtp_password') : ''
+          const fromAddr = mailRec
+            ? mailRec.getString('from_address').trim() || user
+            : companyRec
+              ? companyRec.getString('email').trim() || 'contato@minhaempresa.com.br'
+              : 'noreply@vendaspro.com'
+          const fromName = mailRec
+            ? mailRec.getString('from_name').trim() || 'VendasPro'
+            : companyRec
+              ? companyRec.getString('name').trim() || 'VendasPro'
+              : 'VendasPro'
+          const replyTo = mailRec ? mailRec.getString('reply_to').trim() : ''
+          const enabled = mailRec ? mailRec.getBool('enabled') : false
+
+          const masterKey = (
+            $os.getenv('PB_SUPERUSER_TOKEN') || 'vendaspro-app-master-secret-key-375ac'
+          )
+            .substring(0, 32)
+            .padEnd(32, '0')
+          let pass = ''
+          if (encryptedPass) {
+            try {
+              pass = $security.decrypt(encryptedPass, masterKey)
+            } catch (_) {
+              pass = ''
+            }
+          }
+
+          if (!enabled) {
+            emailSendErr = 'SMTP_DISABLED: Envio de e-mails desativado no painel da empresa.'
+          } else if (!host || !user || !pass) {
+            emailSendErr =
+              'SMTP_NOT_CONFIGURED: O envio de e-mails ainda não está configurado para esta empresa. Entre em Administração → Configurações → E-mail para concluir a configuração.'
           } else {
             try {
               const settings = $app.settings()
@@ -622,22 +662,39 @@ routerAdd(
               settings.smtp.password = pass
               settings.smtp.enabled = true
 
+              const headers = {}
+              if (replyTo) {
+                headers['Reply-To'] = replyTo
+              }
+
               const message = new MailerMessage({
                 from: {
                   address: fromAddr,
-                  name: 'VendasPro',
+                  name: fromName,
                 },
                 to: [{ address: sellerEmail }],
                 subject: subject,
                 html: htmlBody,
+                headers: headers,
               })
 
               $app.newMailClient().send(message)
             } catch (smtpErr) {
               const rawMsg = smtpErr && smtpErr.message ? smtpErr.message : String(smtpErr)
-              emailSendErr = rawMsg
-                .replace(new RegExp(pass.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '***')
-                .replace(new RegExp(user.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '***')
+              let cleanMsg = rawMsg
+              if (pass) {
+                cleanMsg = cleanMsg.replace(
+                  new RegExp(pass.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'),
+                  '***',
+                )
+              }
+              if (user) {
+                cleanMsg = cleanMsg.replace(
+                  new RegExp(user.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'),
+                  '***',
+                )
+              }
+              emailSendErr = cleanMsg
             }
           }
 

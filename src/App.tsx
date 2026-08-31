@@ -28,6 +28,7 @@ import PaymentSettings from './pages/PaymentSettings'
 import FinancialReport from './pages/FinancialReport'
 import Auditoria from './pages/Auditoria'
 import Backups from './pages/Backups'
+import EmailSettings from './pages/EmailSettings'
 import NotFound from './pages/NotFound'
 import { useAuth } from '@/context/AuthContext'
 
@@ -96,6 +97,25 @@ function BackupRoute({ children }: { children: React.ReactNode }) {
         <h2 className="text-sm font-semibold text-slate-700">Acesso restrito</h2>
         <p className="text-xs text-slate-500 mt-1 max-w-sm">
           Você não possui permissão para acessar o módulo de backup do banco de dados (backups.view
+          necessária).
+        </p>
+      </div>
+    )
+  }
+  return <>{children}</>
+}
+
+function EmailSettingsRoute({ children }: { children: React.ReactNode }) {
+  const { can, isAdmin, isSuperAdmin } = useAuth()
+  if (!isSuperAdmin && !isAdmin && !can('settings.email.view') && !can('settings.view')) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+          <span className="text-2xl">🔒</span>
+        </div>
+        <h2 className="text-sm font-semibold text-slate-700">Acesso restrito</h2>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm">
+          Você não possui permissão para acessar as configurações de e-mail (settings.email.view
           necessária).
         </p>
       </div>
@@ -211,6 +231,14 @@ const App = () => (
                 <BackupRoute>
                   <Backups />
                 </BackupRoute>
+              }
+            />
+            <Route
+              path="/configuracoes/email"
+              element={
+                <EmailSettingsRoute>
+                  <EmailSettings />
+                </EmailSettingsRoute>
               }
             />
           </Route>

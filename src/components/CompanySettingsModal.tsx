@@ -411,121 +411,46 @@ export const CompanySettingsModal: React.FC<CompanySettingsModalProps> = ({
               </div>
             </div>
 
-            {/* SMTP Diagnostics & Test Section */}
+            {/* SMTP Shortcut & Status Section */}
             <div className="md:col-span-2 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4 text-indigo-600" />
-                  <span className="text-xs font-bold text-slate-800">
-                    Status & Teste do Servidor SMTP
-                  </span>
+                  <span className="text-xs font-bold text-slate-800">Servidor SMTP da Empresa</span>
                 </div>
                 {smtpStatus?.configured ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                     <CheckCircle2 className="w-3 h-3" />
-                    SMTP Configurado
+                    Configurado
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                     <AlertTriangle className="w-3 h-3" />
-                    Secrets Não Configurados
+                    Não Configurado
                   </span>
                 )}
               </div>
 
-              <div className="text-xs text-slate-600 space-y-1 bg-white p-3 rounded-lg border border-slate-100">
-                <div className="flex items-center gap-1.5 text-slate-500">
-                  <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>
-                    As credenciais reais são lidas de variáveis de ambiente do servidor (
-                    <code>SMTP_HOST</code>, <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code>,{' '}
-                    <code>SMTP_PORT</code>, <code>SMTP_FROM</code>). Nenhuma senha é exibida no
-                    navegador.
+              <div className="text-xs text-slate-600 space-y-2 bg-white p-3 rounded-lg border border-slate-100">
+                <p className="text-xs text-slate-600">
+                  As configurações de servidor SMTP, porta, usuário, segurança e remetente agora são
+                  gerenciadas centralmente pelo painel em <strong>E-mail / SMTP</strong>, com
+                  armazenamento criptografado da senha.
+                </p>
+                <div className="pt-2 flex items-center justify-between border-t border-slate-100">
+                  <span className="text-[11px] text-slate-500">
+                    Host: <strong>{smtpStatus?.host || 'Não definido'}</strong> (
+                    {smtpStatus?.port || '587'})
                   </span>
+                  <a
+                    href="/configuracoes/email"
+                    onClick={() => onClose()}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:underline inline-flex items-center gap-1"
+                  >
+                    Gerenciar SMTP completo &rarr;
+                  </a>
                 </div>
-                {smtpStatus?.configured ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2 pt-2 border-t border-slate-100 font-mono text-[11px]">
-                    <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-sans">
-                        Host:
-                      </span>
-                      <span className="text-slate-700 font-semibold">
-                        {smtpStatus.host || 'Configurado'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-sans">
-                        Porta:
-                      </span>
-                      <span className="text-slate-700 font-semibold">
-                        {smtpStatus.port || '587'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-sans">
-                        Remetente:
-                      </span>
-                      <span className="text-slate-700 font-semibold">
-                        {smtpStatus.from || 'Automático'}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-amber-700 mt-1">
-                    Para habilitar recuperação de senha e e-mails de comissões, configure os secrets
-                    SMTP no painel do Skip Cloud.
-                  </p>
-                )}
               </div>
-
-              {/* Input e Botão de Teste */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
-                <input
-                  type="email"
-                  value={testEmailDestination}
-                  onChange={(e) => setTestEmailDestination(e.target.value)}
-                  placeholder="Destinatário para teste (opcional, padrão: seu e-mail)"
-                  className="flex-1 px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:border-indigo-600 outline-none"
-                />
-                <button
-                  type="button"
-                  disabled={isTestingSmtp}
-                  onClick={handleSendTestEmail}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 active:scale-[0.98] text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
-                >
-                  {isTestingSmtp ? (
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Send className="w-3.5 h-3.5" />
-                  )}
-                  <span>Enviar e-mail de teste</span>
-                </button>
-              </div>
-
-              {/* Resultado do Teste */}
-              {testResult && (
-                <div
-                  className={`p-3 rounded-xl border text-xs ${
-                    testResult.success
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                      : 'bg-rose-50 text-rose-800 border-rose-200'
-                  }`}
-                >
-                  <p className="font-semibold flex items-center gap-1.5">
-                    {testResult.success ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    ) : (
-                      <AlertTriangle className="w-4 h-4 text-rose-600" />
-                    )}
-                    {testResult.message}
-                  </p>
-                  {testResult.error && (
-                    <p className="text-[11px] mt-1 font-mono text-rose-700">
-                      Motivo: {testResult.error}
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 

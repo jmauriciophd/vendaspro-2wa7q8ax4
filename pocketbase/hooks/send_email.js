@@ -1,12 +1,12 @@
 // POST /backend/v1/send-email
-// Envia um email real via SMTP (configurado por variáveis de ambiente SMTP_*)
+// Envia um email real via SMTP configurado dinamicamente no painel administrativo (company_mail_settings)
 // e registra cada envio na coleção `email_logs` com status (sent/failed).
 //
 // POST /backend/v1/smtp/test
-// Testa a configuração de SMTP existente sem exibir dados sensíveis
+// Testa a configuração de SMTP sem exibir dados sensíveis (lê de company_mail_settings)
 //
 // GET /backend/v1/smtp/status
-// Retorna se o SMTP está configurado (sem revelar senhas/usuários)
+// Retorna status de configuração do SMTP da empresa
 
 routerAdd(
   'GET',
@@ -17,19 +17,41 @@ routerAdd(
       return e.json(403, { message: 'Autenticação necessária.' })
     }
 
-    const host = ($os.getenv('SMTP_HOST') || '').trim()
-    const portStr = ($os.getenv('SMTP_PORT') || '').trim()
-    const user = ($os.getenv('SMTP_USER') || '').trim()
-    const pass = ($os.getenv('SMTP_PASSWORD') || '').trim()
-    const fromAddr = ($os.getenv('SMTP_FROM') || '').trim()
+    let mailRec = null
+    try {
+      const recs = $app.findRecordsByFilter('company_mail_settings', '1=1', '-created', 1, 0)
+      if (recs && recs.length > 0) mailRec = recs[0]
+    } catch (_) {}
 
-    const configured = Boolean(host && user && pass)
+    let companyRec = null
+    try {
+      const compRecs = $app.findRecordsByFilter('company_settings', '1=1', 'created', 1, 0)
+      if (compRecs && compRecs.length > 0) companyRec = compRecs[0]
+    } catch (_) {}
+
+    const host = mailRec ? mailRec.getString('smtp_host') : ''
+    const port = mailRec ? mailRec.getInt('smtp_port') || 587 : 587
+    const user = mailRec ? mailRec.getString('smtp_username') : ''
+    const hasPassword = Boolean(mailRec && mailRec.getString('smtp_password'))
+    const fromAddr = mailRec
+      ? mailRec.getString('from_address') || user
+      : companyRec
+        ? companyRec.getString('email')
+        : ''
+    const enabled = mailRec ? mailRec.getBool('enabled') : false
+    const lastTestStatus = mailRec ? mailRec.getString('last_test_status') || 'none' : 'none'
+    const lastTestedAt = mailRec ? mailRec.getString('last_tested_at') || '' : ''
+
+    const configured = Boolean(host && user && hasPassword)
 
     return e.json(200, {
       configured: configured,
+      enabled: enabled,
       host: host ? host.replace(/.(?=.{4})/g, '*') : '',
-      port: portStr || '587',
+      port: String(port),
       from: fromAddr ? fromAddr.replace(/^(.{2})(.*)(@.*)$/, '$1***$3') : '',
+      last_test_status: lastTestStatus,
+      last_tested_at: lastTestedAt,
     })
   },
   $apis.requireAuth(),
@@ -44,7 +66,6 @@ routerAdd(
       return e.json(403, { message: 'Autenticação necessária.' })
     }
 
-    // Apenas quem tiver permissão settings.edit ou admin ou super_admin pode testar SMTP
     const isSuper = auth.get('is_super_admin') === true
     const role = auth.getString('role')
     let permissions = []
@@ -57,11 +78,12 @@ routerAdd(
     const canTest =
       isSuper ||
       role === 'admin' ||
+      permissions.indexOf('settings.email.test') !== -1 ||
+      permissions.indexOf('settings.email.edit') !== -1 ||
       permissions.indexOf('settings.edit') !== -1 ||
       permissions.indexOf('settings.view') !== -1
 
     if (!canTest) {
-      // Registrar tentativa bloqueada em audit log
       try {
         const auditCol = $app.findCollectionByNameOrId('audit_logs')
         const aRec = new Record(auditCol)
@@ -78,20 +100,54 @@ routerAdd(
       return e.json(403, { message: 'Sem permissão para testar configurações de e-mail.' })
     }
 
-    const host = ($os.getenv('SMTP_HOST') || '').trim()
-    const port = parseInt($os.getenv('SMTP_PORT') || '587', 10)
-    const user = ($os.getenv('SMTP_USER') || '').trim()
-    const pass = ($os.getenv('SMTP_PASSWORD') || '').trim()
-    const fromAddr = ($os.getenv('SMTP_FROM') || user || 'noreply@vendaspro.com').trim()
+    // Busca configuração de email em company_mail_settings
+    let mailRec = null
+    try {
+      const recs = $app.findRecordsByFilter('company_mail_settings', '1=1', '-created', 1, 0)
+      if (recs && recs.length > 0) mailRec = recs[0]
+    } catch (_) {}
+
+    let companyRec = null
+    try {
+      const compRecs = $app.findRecordsByFilter('company_settings', '1=1', 'created', 1, 0)
+      if (compRecs && compRecs.length > 0) companyRec = compRecs[0]
+    } catch (_) {}
+
+    let host = mailRec ? mailRec.getString('smtp_host').trim() : ''
+    let port = mailRec ? mailRec.getInt('smtp_port') || 587 : 587
+    let user = mailRec ? mailRec.getString('smtp_username').trim() : ''
+    let encryptedPass = mailRec ? mailRec.getString('smtp_password') : ''
+    let fromAddr = mailRec ? mailRec.getString('from_address').trim() : ''
+    let fromName = mailRec
+      ? mailRec.getString('from_name').trim()
+      : companyRec
+        ? companyRec.getString('name')
+        : 'VendasPro'
+
+    const masterKey = ($os.getenv('PB_SUPERUSER_TOKEN') || 'vendaspro-app-master-secret-key-375ac')
+      .substring(0, 32)
+      .padEnd(32, '0')
+    let pass = ''
+
+    if (encryptedPass) {
+      try {
+        pass = $security.decrypt(encryptedPass, masterKey)
+      } catch (_) {
+        pass = ''
+      }
+    }
 
     if (!host || !user || !pass) {
       return e.json(400, {
         success: false,
         message:
-          'O servidor SMTP não está configurado. Preencha as variáveis SMTP_HOST, SMTP_USER, SMTP_PASSWORD e SMTP_PORT nos segredos do sistema.',
+          'O envio de e-mails ainda não está configurado para esta empresa. Entre em Administração → Configurações → E-mail para concluir a configuração.',
         code: 'SMTP_NOT_CONFIGURED',
       })
     }
+
+    if (!fromAddr) fromAddr = user
+    if (!fromName) fromName = 'VendasPro'
 
     const body = e.requestInfo().body || {}
     const targetEmail = (body.to_email || auth.getString('email') || '').trim()
@@ -115,7 +171,7 @@ routerAdd(
       const message = new MailerMessage({
         from: {
           address: fromAddr,
-          name: $app.settings().meta.senderName || 'VendasPro',
+          name: fromName,
         },
         to: [{ address: targetEmail }],
         subject: 'VendasPro — Teste de Configuração SMTP',
@@ -131,11 +187,21 @@ routerAdd(
 
       $app.newMailClient().send(message)
     } catch (err) {
-      // Garantir que a mensagem de erro não contenha credenciais ou senhas
       const rawMsg = err && err.message ? err.message : String(err)
-      sendErr = rawMsg
-        .replace(new RegExp(pass.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '***')
-        .replace(new RegExp(user.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '***')
+      let cleanMsg = rawMsg
+      if (pass) {
+        cleanMsg = cleanMsg.replace(
+          new RegExp(pass.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'),
+          '***',
+        )
+      }
+      if (user) {
+        cleanMsg = cleanMsg.replace(
+          new RegExp(user.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'),
+          '***',
+        )
+      }
+      sendErr = cleanMsg
     }
 
     // Registra o log em email_logs
@@ -154,7 +220,8 @@ routerAdd(
     if (sendErr) {
       return e.json(500, {
         success: false,
-        message: 'Falha ao conectar ou autenticar no servidor SMTP.',
+        message:
+          'Não foi possível enviar o e-mail. Verifique servidor, porta, usuário, senha e protocolo de segurança.',
         error: sendErr,
       })
     }
@@ -192,16 +259,63 @@ routerAdd(
       return e.json(400, { message: 'Destinatário (to_email) é obrigatório.' })
     }
 
-    const host = ($os.getenv('SMTP_HOST') || '').trim()
-    const port = parseInt($os.getenv('SMTP_PORT') || '587', 10)
-    const user = ($os.getenv('SMTP_USER') || '').trim()
-    const pass = ($os.getenv('SMTP_PASSWORD') || '').trim()
-    const fromAddr = ($os.getenv('SMTP_FROM') || user || 'noreply@vendaspro.com').trim()
+    // Busca configuração de email no banco de dados (painel da empresa)
+    let mailRec = null
+    try {
+      const recs = $app.findRecordsByFilter('company_mail_settings', '1=1', '-created', 1, 0)
+      if (recs && recs.length > 0) mailRec = recs[0]
+    } catch (_) {}
+
+    let companyRec = null
+    try {
+      const compRecs = $app.findRecordsByFilter('company_settings', '1=1', 'created', 1, 0)
+      if (compRecs && compRecs.length > 0) companyRec = compRecs[0]
+    } catch (_) {}
+
+    let host = mailRec ? mailRec.getString('smtp_host').trim() : ''
+    let port = mailRec ? mailRec.getInt('smtp_port') || 587 : 587
+    let user = mailRec ? mailRec.getString('smtp_username').trim() : ''
+    let encryptedPass = mailRec ? mailRec.getString('smtp_password') : ''
+    let fromAddr = mailRec ? mailRec.getString('from_address').trim() : ''
+    let fromName = mailRec
+      ? mailRec.getString('from_name').trim()
+      : companyRec
+        ? companyRec.getString('name')
+        : 'VendasPro'
+    let replyTo = mailRec ? mailRec.getString('reply_to').trim() : ''
+    let enabled = mailRec ? mailRec.getBool('enabled') : false
+
+    const masterKey = ($os.getenv('PB_SUPERUSER_TOKEN') || 'vendaspro-app-master-secret-key-375ac')
+      .substring(0, 32)
+      .padEnd(32, '0')
+    let pass = ''
+
+    if (encryptedPass) {
+      try {
+        pass = $security.decrypt(encryptedPass, masterKey)
+      } catch (_) {
+        pass = ''
+      }
+    }
+
+    if (!fromAddr) fromAddr = user
+    if (!fromName) fromName = 'VendasPro'
 
     let sendErr = ''
 
-    if (!host || !user || !pass) {
-      sendErr = 'SMTP_NOT_CONFIGURED: Servidor SMTP não configurado.'
+    const isUserAdmin =
+      e.auth && (e.auth.get('is_super_admin') === true || e.auth.getString('role') === 'admin')
+
+    if (!enabled) {
+      sendErr = 'SMTP_DISABLED: O envio de e-mails está desativado nas configurações do sistema.'
+    } else if (!host || !user || !pass) {
+      if (isUserAdmin) {
+        sendErr =
+          'O envio de e-mails ainda não está configurado para esta empresa. Entre em Administração → Configurações → E-mail para concluir a configuração.'
+      } else {
+        sendErr =
+          'O serviço de envio de e-mails está indisponível no momento. Entre em contato com a administração.'
+      }
     } else {
       try {
         const settings = $app.settings()
@@ -211,14 +325,20 @@ routerAdd(
         settings.smtp.password = pass
         settings.smtp.enabled = true
 
+        const headers = {}
+        if (replyTo) {
+          headers['Reply-To'] = replyTo
+        }
+
         const message = new MailerMessage({
           from: {
             address: fromAddr,
-            name: $app.settings().meta.senderName || 'VendasPro',
+            name: fromName,
           },
           to: [{ address: toEmail }],
           subject: subject,
           html: htmlBody,
+          headers: headers,
           attachments: attachmentHtml
             ? [
                 {
@@ -233,9 +353,20 @@ routerAdd(
         $app.newMailClient().send(message)
       } catch (err) {
         const rawMsg = err && err.message ? err.message : String(err)
-        sendErr = rawMsg
-          .replace(new RegExp(pass.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '***')
-          .replace(new RegExp(user.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '***')
+        let cleanMsg = rawMsg
+        if (pass) {
+          cleanMsg = cleanMsg.replace(
+            new RegExp(pass.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'),
+            '***',
+          )
+        }
+        if (user) {
+          cleanMsg = cleanMsg.replace(
+            new RegExp(user.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'),
+            '***',
+          )
+        }
+        sendErr = cleanMsg
       }
     }
 
