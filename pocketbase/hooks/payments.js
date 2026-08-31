@@ -367,6 +367,8 @@ routerAdd(
     } catch (_) {
       return e.json(404, { message: 'Provedor não encontrado.' })
     }
+    const provSlug = (provider.get('slug') || '').toString().toLowerCase()
+    const provEnv = (provider.get('environment') || 'sandbox').toString().toLowerCase()
     const provMethods = provider.get('methods') || []
     let methodOk = false
     for (let i = 0; i < provMethods.length; i++) {
@@ -375,6 +377,20 @@ routerAdd(
         break
       }
     }
+
+    // Se o provedor for Mercado Pago em sandbox e o array de métodos vier vazio (ex: erro de config inicial),
+    // garante suporte aos métodos pix, boleto e link
+    if (
+      !methodOk &&
+      provSlug === 'mercadopago' &&
+      provEnv === 'sandbox' &&
+      (!provMethods || provMethods.length === 0)
+    ) {
+      if (method === 'pix' || method === 'boleto' || method === 'link') {
+        methodOk = true
+      }
+    }
+
     if (!methodOk) {
       return e.json(400, { message: 'Método de pagamento não suportado pelo provedor.' })
     }
@@ -595,10 +611,28 @@ routerAdd(
               }
               providerResp = pr
             } else {
-              boletoWarning = 'Mercado Pago respondeu ' + (res ? res.statusCode : 'sem resposta')
+              if (res && res.statusCode === 401) {
+                return e.json(400, {
+                  message: 'Credenciais do Mercado Pago inválidas ou expiradas',
+                })
+              }
+              const errDetail =
+                res && res.json && (res.json.message || res.json.error)
+                  ? res.json.message || res.json.error
+                  : ''
+              const msg = errDetail
+                ? 'Erro no Mercado Pago: ' + errDetail
+                : 'Falha na comunicação com o Mercado Pago (HTTP ' +
+                  (res ? res.statusCode : 'sem resposta') +
+                  ')'
+              return e.json(400, { message: msg })
             }
           } catch (err) {
-            boletoWarning = 'Mercado Pago indisponível: ' + err
+            return e.json(400, {
+              message:
+                'Erro ao conectar à API do Mercado Pago: ' +
+                (err && err.message ? err.message : String(err)),
+            })
           }
         } else if (provSlug === 'asaas') {
           try {
@@ -2324,7 +2358,10 @@ routerAdd(
       } catch (_) {}
     }
     if (!charge) {
-      return e.json(404, { message: 'Nenhuma cobrança encontrada para testar.' })
+      return e.json(404, {
+        message:
+          'Nenhuma cobrança encontrada para testar. Crie uma cobrança de teste e tente realizar o pagamento no sandbox antes de testar o webhook.',
+      })
     }
 
     const externalEventId = 'TEST-' + $security.randomString(12).toUpperCase()
@@ -3066,6 +3103,8 @@ routerAdd(
               doc: externalId,
             }
             providerResp = pr
+          } else if (res && res.statusCode === 401) {
+            return e.json(400, { message: 'Credenciais do Mercado Pago inválidas ou expiradas' })
           }
         } catch (_) {}
       } else if (provSlug === 'asaas') {

@@ -106,7 +106,15 @@ export default function PaymentSettings() {
       load()
     } catch (err) {
       console.error(err)
-      const msg = (err as any)?.response?.message || 'Erro ao testar webhook.'
+      let msg =
+        (err as any)?.response?.message || (err as any)?.message || 'Erro ao testar webhook.'
+      if (
+        msg.includes('Nenhuma cobrança encontrada') &&
+        !msg.includes('Crie uma cobrança de teste')
+      ) {
+        msg =
+          'Nenhuma cobrança encontrada para testar. Crie uma cobrança de teste e tente realizar o pagamento no sandbox antes de testar o webhook.'
+      }
       toast.error(msg)
     } finally {
       setTestingId(null)
@@ -450,6 +458,9 @@ function ProviderModal({
   const [webhookConfigured, setWebhookConfigured] = useState(provider?.webhook_configured || false)
   const [saving, setSaving] = useState(false)
 
+  const isMercadoPago =
+    slug.trim().toLowerCase() === 'mercadopago' || provider?.slug === 'mercadopago'
+
   const toggleMethod = (m: PaymentMethod) => {
     setMethods((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]))
   }
@@ -583,9 +594,16 @@ function ProviderModal({
                 <span className="font-normal normal-case">(em branco mantém o atual)</span>
               )}
             </p>
+            {isMercadoPago && (
+              <p className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg p-2.5">
+                No Mercado Pago, insira a <strong>Public Key</strong> no primeiro campo e o{' '}
+                <strong>Access Token</strong> no segundo campo para evitar trocas acidentais de
+                chaves.
+              </p>
+            )}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                API Key{' '}
+                {isMercadoPago ? 'Public Key (Mercado Pago)' : 'API Key'}{' '}
                 {provider && provider.api_key_masked && (
                   <span className="text-slate-400 font-mono">
                     (••••{provider.api_key_masked.slice(-4)})
@@ -599,14 +617,16 @@ function ProviderModal({
                 placeholder={
                   provider
                     ? `••••${(provider.api_key_masked || '').slice(-4) || '••••'}`
-                    : 'Informe a API key'
+                    : isMercadoPago
+                      ? 'Public Key (Mercado Pago)'
+                      : 'Informe a API key'
                 }
                 className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none font-mono"
               />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                API Secret{' '}
+                {isMercadoPago ? 'Access Token (Mercado Pago)' : 'API Secret'}{' '}
                 {provider && provider.api_secret_masked && (
                   <span className="text-slate-400 font-mono">({provider.api_secret_masked})</span>
                 )}
@@ -615,7 +635,13 @@ function ProviderModal({
                 type="password"
                 value={apiSecret}
                 onChange={(e) => setApiSecret(e.target.value)}
-                placeholder={provider ? '••••••••' : 'Informe o secret'}
+                placeholder={
+                  provider
+                    ? '••••••••'
+                    : isMercadoPago
+                      ? 'Access Token (Mercado Pago)'
+                      : 'Informe o secret'
+                }
                 className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none font-mono"
               />
             </div>
