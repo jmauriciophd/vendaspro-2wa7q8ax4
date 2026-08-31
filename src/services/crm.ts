@@ -12,6 +12,7 @@ import type {
   SalesTarget,
   Reminder,
   ReminderStatus,
+  AuditLog,
 } from '@/types/crm'
 
 export const customerService = {
@@ -275,12 +276,17 @@ export const userService = {
     })
   },
 
+  async getById(id: string) {
+    return await pb.collection('users').getOne<User>(id)
+  },
+
   async create(data: {
     name: string
     email: string
     password: string
     role?: User['role']
     active?: boolean
+    permissions?: string[]
   }) {
     return await pb.collection('users').create<User>({
       name: data.name,
@@ -290,17 +296,25 @@ export const userService = {
       emailVisibility: true,
       role: data.role || 'vendedor',
       active: data.active !== undefined ? data.active : true,
+      permissions: data.permissions || [],
     })
   },
 
   async update(
     id: string,
-    data: Partial<{ name: string; role: User['role']; active: boolean; password: string }>,
+    data: Partial<{
+      name: string
+      role: User['role']
+      active: boolean
+      password: string
+      permissions: string[]
+    }>,
   ) {
     const payload: Record<string, unknown> = {}
     if (data.name !== undefined) payload.name = data.name
     if (data.role !== undefined) payload.role = data.role
     if (data.active !== undefined) payload.active = data.active
+    if (data.permissions !== undefined) payload.permissions = data.permissions
     if (data.password) {
       payload.password = data.password
       payload.passwordConfirm = data.password
@@ -310,6 +324,109 @@ export const userService = {
 
   async delete(id: string) {
     return await pb.collection('users').delete(id)
+  },
+}
+
+export const auditLogService = {
+  async getAll(params?: {
+    actor?: string
+    target?: string
+    action?: string
+    module?: string
+    result?: string
+    search?: string
+    startDate?: string
+    endDate?: string
+    limit?: number
+    page?: number
+  }) {
+    const filterParts: string[] = []
+    if (params?.actor && params.actor !== 'all') {
+      filterParts.push(`actor = "${params.actor}"`)
+    }
+    if (params?.target && params.target !== 'all') {
+      filterParts.push(`target = "${params.target}"`)
+    }
+    if (params?.action && params.action !== 'all') {
+      filterParts.push(`action = "${params.action}"`)
+    }
+    if (params?.module && params.module !== 'all') {
+      filterParts.push(`module = "${params.module}"`)
+    }
+    if (params?.result && params.result !== 'all') {
+      filterParts.push(`result = "${params.result}"`)
+    }
+    if (params?.startDate) {
+      filterParts.push(`created >= "${params.startDate} 00:00:00"`)
+    }
+    if (params?.endDate) {
+      filterParts.push(`created <= "${params.endDate} 23:59:59"`)
+    }
+    if (params?.search) {
+      const s = params.search.replace(/"/g, '\\"')
+      filterParts.push(
+        `(description ~ "${s}" || action ~ "${s}" || module ~ "${s}" || ip ~ "${s}")`,
+      )
+    }
+
+    return await pb
+      .collection('audit_logs')
+      .getList<AuditLog>(params?.page || 1, params?.limit || 50, {
+        filter: filterParts.join(' && '),
+        sort: '-created',
+        expand: 'actor,target',
+      })
+  },
+
+  async getModules() {
+    return [
+      { id: 'users', label: 'Equipe & Usuários' },
+      { id: 'auth', label: 'Autenticação & Segurança' },
+      { id: 'commissions', label: 'Comissões' },
+      { id: 'settings', label: 'Configurações' },
+      { id: 'payments', label: 'Pagamentos' },
+      { id: 'reports', label: 'Relatórios' },
+      { id: 'sales', label: 'Vendas' },
+      { id: 'customers', label: 'Clientes' },
+    ]
+  },
+}
+
+export const smtpService = {
+  async getStatus(): Promise<{
+    configured: boolean
+    host: string
+    port: string
+    from: string
+  }> {
+    try {
+      const res = await pb.send('/backend/v1/smtp/status', { method: 'GET' })
+      return res
+    } catch {
+      return { configured: false, host: '', port: '587', from: '' }
+    }
+  },
+
+  async sendTestEmail(toEmail?: string): Promise<{
+    success: boolean
+    message: string
+    error?: string
+    code?: string
+  }> {
+    try {
+      const res = await pb.send('/backend/v1/smtp/test', {
+        method: 'POST',
+        body: toEmail ? { to_email: toEmail } : {},
+      })
+      return res
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err?.data?.message || err?.message || 'Falha ao testar conexão SMTP.',
+        error: err?.data?.error,
+        code: err?.data?.code,
+      }
+    }
   },
 }
 

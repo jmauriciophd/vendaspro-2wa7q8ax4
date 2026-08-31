@@ -52,10 +52,18 @@ export default function Login() {
     setIsResetting(true)
     try {
       await pb.collection('users').requestPasswordReset(email.trim())
-      toast.success('Instruções de redefinição enviadas para o seu e-mail!')
+      // Mensagem genérica e segura que não revela a existência do e-mail
+      toast.success(
+        'Se houver uma conta associada a este e-mail, você receberá as instruções para redefinir sua senha.',
+        { duration: 6000 },
+      )
     } catch (err: any) {
-      console.error(err)
-      toast.error(err?.data?.message || 'Erro ao solicitar redefinição de senha.')
+      console.error('Password reset request:', err)
+      // Mensagem genérica mesmo em caso de erro da chamada para evitar enumeração
+      toast.success(
+        'Se houver uma conta associada a este e-mail, você receberá as instruções para redefinir sua senha.',
+        { duration: 6000 },
+      )
     } finally {
       setIsResetting(false)
     }

@@ -14,8 +14,8 @@ import {
   Search,
 } from 'lucide-react'
 import { userService } from '@/services/crm'
-import { useAuth } from '@/context/AuthContext'
-import type { User, UserRole } from '@/types/crm'
+import { useAuth, ROLE_DEFAULT_PERMISSIONS } from '@/context/AuthContext'
+import type { User, UserRole, AppPermission } from '@/types/crm'
 import { useRealtime } from '@/hooks/use-realtime'
 import { toast } from 'sonner'
 
@@ -42,7 +42,11 @@ const roleConfig: Record<UserRole, { label: string; icon: any; bg: string; descr
   }
 
 export default function Equipe() {
-  const { user: currentUser, isAdmin } = useAuth()
+  const { user: currentUser, isAdmin, can } = useAuth()
+  const canCreateUser = isAdmin || can('users.create')
+  const canEditUser = isAdmin || can('users.edit')
+  const canDeleteUser = isAdmin || can('users.delete')
+
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -87,8 +91,8 @@ export default function Equipe() {
       toast.error('Você não pode excluir seu próprio usuário.')
       return
     }
-    if (u.email === 'jmauriciophd@gmail.com') {
-      toast.error('O administrador principal não pode ser excluído.')
+    if (u.is_super_admin || u.email === 'jmauriciophd@gmail.com') {
+      toast.error('O Super Administrador não pode ser excluído.')
       return
     }
     if (!confirm(`Deseja realmente excluir o usuário "${u.name || u.email}"?`)) return
@@ -96,9 +100,9 @@ export default function Equipe() {
       await userService.delete(u.id)
       toast.success('Usuário removido')
       loadUsers()
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      toast.error('Erro ao excluir usuário')
+      toast.error(err?.data?.message || 'Erro ao excluir usuário')
     }
   }
 
@@ -118,7 +122,7 @@ export default function Equipe() {
           </p>
         </div>
 
-        {isAdmin && (
+        {canCreateUser && (
           <button
             onClick={() => {
               setUserToEdit(null)
@@ -127,7 +131,7 @@ export default function Equipe() {
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-semibold rounded-xl shadow-xs shadow-indigo-600/20 flex items-center gap-1.5 transition-all cursor-pointer self-start md:self-auto"
           >
             <Plus className="w-4 h-4" />
-            <span>Novo Usuário</span>
+            <span>Novo Membro</span>
           </button>
         )}
       </div>
@@ -212,7 +216,7 @@ export default function Equipe() {
                   const cfg = roleConfig[u.role || 'vendedor']
                   const RoleIcon = cfg.icon
                   const isSelf = u.id === currentUser?.id
-                  const isMainAdminTarget = u.email === 'jmauriciophd@gmail.com'
+                  const isSuperAdminUser = u.is_super_admin || u.email === 'jmauriciophd@gmail.com'
                   return (
                     <tr key={u.id} className="hover:bg-slate-50/70 transition-colors group">
                       <td className="py-3.5 px-4 font-bold text-slate-900">
@@ -225,10 +229,15 @@ export default function Equipe() {
                               .join('')}
                           </div>
                           <div>
-                            <p className="text-xs font-semibold text-slate-800">
-                              {u.name || 'Sem nome'}
+                            <p className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                              <span>{u.name || 'Sem nome'}</span>
+                              {isSuperAdminUser && (
+                                <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[9px] font-bold uppercase tracking-wider">
+                                  Super Admin
+                                </span>
+                              )}
                               {isSelf && (
-                                <span className="ml-2 text-[10px] text-indigo-600 font-semibold">
+                                <span className="text-[10px] text-indigo-600 font-semibold">
                                   (você)
                                 </span>
                               )}
@@ -264,22 +273,22 @@ export default function Equipe() {
                       <td className="py-3.5 px-4 text-slate-500">
                         {new Date(u.created).toLocaleDateString('pt-BR')}
                       </td>
-                      {isAdmin && (
+                      {(canEditUser || canDeleteUser || isAdmin) && (
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {(!isMainAdminTarget || isSelf) && (
+                            {((canEditUser && (!isSuperAdminUser || isSelf)) || isSelf) && (
                               <button
                                 onClick={() => {
                                   setUserToEdit(u)
                                   setIsModalOpen(true)
                                 }}
-                                title="Editar usuário"
+                                title="Editar usuário e permissões"
                                 className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
                             )}
-                            {!isSelf && !isMainAdminTarget && (
+                            {!isSelf && !isSuperAdminUser && canDeleteUser && (
                               <button
                                 onClick={() => handleDelete(u)}
                                 title="Excluir usuário"
@@ -346,14 +355,96 @@ interface UserModalProps {
   onSaved: () => void
 }
 
+const PERMISSION_MODULES = [
+  {
+    module: 'Equipe & Usuários',
+    permissions: [
+      { key: 'users.view', label: 'Visualizar membros da equipe' },
+      { key: 'users.create', label: 'Cadastrar novos usuários' },
+      { key: 'users.edit', label: 'Editar usuários e cargos' },
+      { key: 'users.disable', label: 'Desativar/Ativar contas' },
+      { key: 'users.delete', label: 'Excluir usuários' },
+    ],
+  },
+  {
+    module: 'Auditoria & Segurança',
+    permissions: [{ key: 'audit.view', label: 'Visualizar logs de auditoria' }],
+  },
+  {
+    module: 'Comissões',
+    permissions: [
+      { key: 'commissions.view', label: 'Visualizar comissões gerais' },
+      { key: 'commissions.create', label: 'Calcular comissões do período' },
+      { key: 'commissions.edit', label: 'Editar regras e valores' },
+      { key: 'commissions.approve', label: 'Aprovar comissões pendentes' },
+      { key: 'commissions.pay', label: 'Marcar comissões como pagas' },
+    ],
+  },
+  {
+    module: 'Relatórios & Exportações',
+    permissions: [
+      { key: 'reports.view', label: 'Visualizar relatórios gerenciais' },
+      { key: 'reports.export', label: 'Exportar dados para Excel/PDF' },
+    ],
+  },
+  {
+    module: 'Configurações do Sistema',
+    permissions: [
+      { key: 'settings.view', label: 'Visualizar dados fiscais e SMTP' },
+      { key: 'settings.edit', label: 'Editar configurações e testar SMTP' },
+    ],
+  },
+  {
+    module: 'Cobranças & Pagamentos',
+    permissions: [
+      { key: 'payments.view', label: 'Visualizar cobranças' },
+      { key: 'payments.create', label: 'Gerar novas cobranças Pix/Boleto' },
+      { key: 'payments.send', label: 'Enviar cobrança por email/WhatsApp' },
+      { key: 'payments.cancel', label: 'Cancelar cobranças' },
+      { key: 'payments.refund', label: 'Estornar valores pagos' },
+      { key: 'payments.reconcile', label: 'Realizar conciliação bancária' },
+      { key: 'payments.providers.manage', label: 'Configurar gateways de pagamento' },
+    ],
+  },
+]
+
 const UserModal: React.FC<UserModalProps> = ({ userToEdit, onClose, onSaved }) => {
+  const isSuperAdminTarget =
+    userToEdit?.is_super_admin || userToEdit?.email === 'jmauriciophd@gmail.com'
+
   const [name, setName] = useState(userToEdit?.name || '')
   const [email, setEmail] = useState(userToEdit?.email || '')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<UserRole>(userToEdit?.role || 'vendedor')
   const [active, setActive] = useState(userToEdit?.active !== false)
+
+  // Custom permissions array
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>(() => {
+    if (userToEdit?.permissions) {
+      if (Array.isArray(userToEdit.permissions)) return userToEdit.permissions
+      try {
+        return JSON.parse(userToEdit.permissions)
+      } catch {
+        return []
+      }
+    }
+    return []
+  })
+
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Toggle permission
+  const handleTogglePermission = (permKey: string) => {
+    setSelectedPermissions((prev) =>
+      prev.includes(permKey) ? prev.filter((p) => p !== permKey) : [...prev, permKey],
+    )
+  }
+
+  // Preenche permissões padrão da role ao alterar a role (se for novo usuário ou se quiser resetar)
+  const handleRoleChange = (newRole: UserRole) => {
+    setRole(newRole)
+  }
 
   const validate = () => {
     const errs: { [key: string]: string } = {}
@@ -375,9 +466,10 @@ const UserModal: React.FC<UserModalProps> = ({ userToEdit, onClose, onSaved }) =
           name: name.trim() || undefined,
           role,
           active,
+          permissions: selectedPermissions,
           password: password || undefined,
         })
-        toast.success('Usuário atualizado!')
+        toast.success('Usuário atualizado com sucesso!')
       } else {
         await userService.create({
           name: name.trim(),
@@ -385,14 +477,15 @@ const UserModal: React.FC<UserModalProps> = ({ userToEdit, onClose, onSaved }) =
           password,
           role,
           active,
+          permissions: selectedPermissions,
         })
-        toast.success('Usuário criado!')
+        toast.success('Membro da equipe criado com sucesso!')
       }
       onSaved()
       onClose()
     } catch (err: any) {
       console.error(err)
-      toast.error(err?.data?.message || 'Erro ao salvar usuário')
+      toast.error(err?.data?.message || err?.message || 'Erro ao salvar usuário')
     } finally {
       setIsSubmitting(false)
     }
@@ -400,7 +493,7 @@ const UserModal: React.FC<UserModalProps> = ({ userToEdit, onClose, onSaved }) =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
@@ -408,10 +501,12 @@ const UserModal: React.FC<UserModalProps> = ({ userToEdit, onClose, onSaved }) =
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-800">
-                {userToEdit ? 'Editar Usuário' : 'Novo Usuário'}
+                {userToEdit ? 'Editar Usuário & Permissões' : 'Novo Membro da Equipe'}
               </h3>
               <p className="text-xs text-slate-500">
-                {userToEdit ? 'Atualize dados e permissões' : 'Cadastre um membro da equipe'}
+                {userToEdit
+                  ? 'Atualize dados de acesso e permissões granulares'
+                  : 'Cadastre um novo usuário com papel e permissões'}
               </p>
             </div>
           </div>
@@ -424,37 +519,51 @@ const UserModal: React.FC<UserModalProps> = ({ userToEdit, onClose, onSaved }) =
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Nome</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Nome completo"
-              className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
-            />
-          </div>
+          {isSuperAdminTarget && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                <strong>Super Administrador:</strong> Esta conta possui acesso irrestrito a todos os
+                módulos e não pode ser desativada nem rebaixada.
+              </span>
+            </div>
+          )}
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Email *</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={!!userToEdit}
-              placeholder="email@empresa.com.br"
-              className={`w-full px-3.5 py-2 text-sm bg-white border rounded-xl outline-none ${
-                errors.email
-                  ? 'border-red-500 ring-2 ring-red-100'
-                  : 'border-slate-200 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100'
-              } ${userToEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
-            />
-            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Nome Completo
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ex: João da Silva"
+                className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">E-mail *</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={!!userToEdit}
+                placeholder="email@empresa.com.br"
+                className={`w-full px-3.5 py-2 text-sm bg-white border rounded-xl outline-none ${
+                  errors.email
+                    ? 'border-red-500 ring-2 ring-red-100'
+                    : 'border-slate-200 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100'
+                } ${userToEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+              />
+              {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Senha {userToEdit ? '(deixe vazio para manter)' : '*'}
+              Senha {userToEdit ? '(deixe vazio para manter a atual)' : '*'}
             </label>
             <input
               type="password"
@@ -472,37 +581,104 @@ const UserModal: React.FC<UserModalProps> = ({ userToEdit, onClose, onSaved }) =
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Papel *</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Papel Principal (Role) *
+              </label>
               <select
                 value={role}
-                disabled={userToEdit?.email === 'jmauriciophd@gmail.com'}
-                onChange={(e) => setRole(e.target.value as UserRole)}
+                disabled={isSuperAdminTarget}
+                onChange={(e) => handleRoleChange(e.target.value as UserRole)}
                 className={`w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none ${
-                  userToEdit?.email === 'jmauriciophd@gmail.com'
-                    ? 'opacity-60 cursor-not-allowed'
-                    : ''
+                  isSuperAdminTarget ? 'opacity-60 cursor-not-allowed' : ''
                 }`}
               >
-                <option value="admin">Admin (acesso total)</option>
-                <option value="gerente">Gerente (relatórios/equipe)</option>
-                <option value="vendedor">Vendedor (apenas o seu)</option>
+                <option value="admin">Admin (Acesso Total)</option>
+                <option value="gerente">Gerente (Gestão & Relatórios)</option>
+                <option value="vendedor">Vendedor (Operacional Comercial)</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Status da Conta
+              </label>
               <select
                 value={active ? 'true' : 'false'}
-                disabled={userToEdit?.email === 'jmauriciophd@gmail.com'}
+                disabled={isSuperAdminTarget}
                 onChange={(e) => setActive(e.target.value === 'true')}
                 className={`w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none ${
-                  userToEdit?.email === 'jmauriciophd@gmail.com'
-                    ? 'opacity-60 cursor-not-allowed'
-                    : ''
+                  isSuperAdminTarget ? 'opacity-60 cursor-not-allowed' : ''
                 }`}
               >
                 <option value="true">Ativo</option>
-                <option value="false">Inativo</option>
+                <option value="false">Inativo (Acesso Bloqueado)</option>
               </select>
+            </div>
+          </div>
+
+          {/* Granular Permissions (RBAC) */}
+          <div className="pt-2 border-t border-slate-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Permissões Granulares (RBAC)
+                </label>
+                <p className="text-[11px] text-slate-500">
+                  Adicione ou personalize permissões extras além do papel padrão.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              {PERMISSION_MODULES.map((group) => (
+                <div
+                  key={group.module}
+                  className="bg-white p-3 rounded-lg border border-slate-200/80 space-y-2"
+                >
+                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
+                    {group.module}
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {group.permissions.map((p) => {
+                      const isDefaultRolePerm = ROLE_DEFAULT_PERMISSIONS[role]?.includes(
+                        p.key as AppPermission,
+                      )
+                      const isChecked =
+                        isSuperAdminTarget ||
+                        isDefaultRolePerm ||
+                        selectedPermissions.includes(p.key)
+                      const isDisabled = isSuperAdminTarget || isDefaultRolePerm
+
+                      return (
+                        <label
+                          key={p.key}
+                          className={`flex items-start gap-2 p-2 rounded-md transition-colors ${
+                            isDisabled
+                              ? 'bg-slate-50 opacity-75 cursor-default'
+                              : 'hover:bg-slate-50 cursor-pointer'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={isDisabled}
+                            onChange={() => handleTogglePermission(p.key)}
+                            className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div className="min-w-0">
+                            <span className="text-xs font-semibold text-slate-800 block">
+                              {p.label}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {p.key}
+                              {isDefaultRolePerm && !isSuperAdminTarget && ' (incluso no papel)'}
+                            </span>
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -524,7 +700,7 @@ const UserModal: React.FC<UserModalProps> = ({ userToEdit, onClose, onSaved }) =
               ) : (
                 <>
                   <CheckCircle className="w-4 h-4" />
-                  <span>{userToEdit ? 'Salvar Alterações' : 'Criar Usuário'}</span>
+                  <span>{userToEdit ? 'Salvar Alterações' : 'Criar Membro'}</span>
                 </>
               )}
             </button>

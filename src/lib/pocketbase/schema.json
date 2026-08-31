@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-31T14:22:09.362Z",
+  "generatedAt": "2026-08-31T14:31:58.351Z",
   "collections": [
     {
       "name": "users",
@@ -47,6 +47,18 @@
         },
         {
           "name": "active",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "permissions",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "is_super_admin",
           "type": "bool",
           "required": false,
           "system": false
@@ -1761,6 +1773,104 @@
       ],
       "indexes": [
         "CREATE UNIQUE INDEX idx_payment_provider_configs_provider ON payment_provider_configs (provider_id)"
+      ]
+    },
+    {
+      "name": "audit_logs",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.is_super_admin = true || @request.auth.permissions ~ 'audit.view')",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.is_super_admin = true || @request.auth.permissions ~ 'audit.view')",
+        "create": "@request.auth.id != ''",
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "actor",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "target",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "action",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "module",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ip",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "user_agent",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "before",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "after",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "result",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["success", "blocked", "error"]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_audit_logs_created ON audit_logs (created DESC)",
+        "CREATE INDEX idx_audit_logs_actor ON audit_logs (actor)",
+        "CREATE INDEX idx_audit_logs_target ON audit_logs (target)",
+        "CREATE INDEX idx_audit_logs_action ON audit_logs (action)",
+        "CREATE INDEX idx_audit_logs_module ON audit_logs (module)",
+        "CREATE INDEX idx_audit_logs_result ON audit_logs (result)"
       ]
     }
   ]

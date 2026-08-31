@@ -28,6 +28,7 @@ import {
   CheckCircle2,
   Scale,
   CreditCard,
+  ShieldAlert,
 } from 'lucide-react'
 import { NotificationCenter } from '@/components/notifications/NotificationCenter'
 import { QuickCustomerModal } from '@/components/QuickCustomerModal'
@@ -38,7 +39,7 @@ import { toast } from 'sonner'
 import { useRealtime } from '@/hooks/use-realtime'
 
 export default function Layout() {
-  const { user, logout, isLoading, isManager, isAdmin } = useAuth()
+  const { user, logout, isLoading, isManager, isAdmin, can } = useAuth()
   const isSeller = !isManager // vendedor: role === 'vendedor'
   const navigate = useNavigate()
   const location = useLocation()
@@ -207,6 +208,9 @@ export default function Layout() {
         ...(isManager ? [{ label: 'Equipe', path: '/equipe', icon: Users }] : []),
         ...(isAdmin
           ? [{ label: 'Pagamentos', path: '/configuracoes/pagamentos', icon: CreditCard }]
+          : []),
+        ...(isAdmin || can('audit.view')
+          ? [{ label: 'Auditoria', path: '/auditoria', icon: ShieldAlert }]
           : []),
       ]
 

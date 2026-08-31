@@ -1,8 +1,51 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
-import type { User } from '@/types/crm'
+import type { User, AppPermission } from '@/types/crm'
 
 type Role = 'admin' | 'gerente' | 'vendedor'
+
+// Default permissions by role (baseline)
+export const ROLE_DEFAULT_PERMISSIONS: Record<Role, AppPermission[]> = {
+  admin: [
+    'users.view',
+    'users.create',
+    'users.edit',
+    'users.disable',
+    'users.delete',
+    'audit.view',
+    'commissions.view',
+    'commissions.create',
+    'commissions.edit',
+    'commissions.approve',
+    'commissions.pay',
+    'reports.view',
+    'reports.export',
+    'settings.view',
+    'settings.edit',
+    'payments.view',
+    'payments.create',
+    'payments.send',
+    'payments.cancel',
+    'payments.refund',
+    'payments.reconcile',
+    'payments.providers.manage',
+  ],
+  gerente: [
+    'users.view',
+    'commissions.view',
+    'commissions.create',
+    'commissions.edit',
+    'commissions.approve',
+    'commissions.pay',
+    'reports.view',
+    'reports.export',
+    'payments.view',
+    'payments.create',
+    'payments.send',
+    'payments.reconcile',
+  ],
+  vendedor: ['commissions.view', 'payments.view', 'payments.create', 'payments.send'],
+}
 
 interface AuthContextType {
   user: User | null
@@ -13,7 +56,9 @@ interface AuthContextType {
   role: Role
   isAdmin: boolean
   isManager: boolean
+  isSuperAdmin: boolean
   canManageTeam: boolean
+  can: (permission: AppPermission | string) => boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -61,9 +106,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const role: Role = (user?.role as Role) || 'vendedor'
-  const isAdmin = role === 'admin'
-  const isManager = role === 'admin' || role === 'gerente'
+  const isSuperAdmin = Boolean(user?.is_super_admin || user?.email === 'jmauriciophd@gmail.com')
+  const isAdmin = role === 'admin' || isSuperAdmin
+  const isManager = isAdmin || role === 'gerente'
   const canManageTeam = isManager
+
+  const can = (permission: AppPermission | string): boolean => {
+    if (!user) return false
+    // Super admin can do EVERYTHING always
+    if (isSuperAdmin) return true
+
+    // Check custom permissions list on user record
+    const customPerms: string[] = Array.isArray(user.permissions)
+      ? user.permissions
+      : typeof user.permissions === 'string'
+        ? JSON.parse(user.permissions || '[]')
+        : []
+
+    if (customPerms.includes(permission)) return true
+
+    // Check role default baseline permissions
+    const defaults = ROLE_DEFAULT_PERMISSIONS[role] || []
+    return defaults.includes(permission as AppPermission)
+  }
 
   return (
     <AuthContext.Provider
@@ -76,7 +141,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role,
         isAdmin,
         isManager,
+        isSuperAdmin,
         canManageTeam,
+        can,
       }}
     >
       {children}

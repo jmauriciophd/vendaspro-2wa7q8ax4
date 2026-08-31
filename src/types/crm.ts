@@ -101,6 +101,30 @@ export interface SaleItem extends RecordModel {
 
 export type UserRole = 'admin' | 'gerente' | 'vendedor'
 
+export type AppPermission =
+  | 'users.view'
+  | 'users.create'
+  | 'users.edit'
+  | 'users.disable'
+  | 'users.delete'
+  | 'audit.view'
+  | 'commissions.view'
+  | 'commissions.create'
+  | 'commissions.edit'
+  | 'commissions.approve'
+  | 'commissions.pay'
+  | 'reports.view'
+  | 'reports.export'
+  | 'settings.view'
+  | 'settings.edit'
+  | 'payments.view'
+  | 'payments.create'
+  | 'payments.send'
+  | 'payments.cancel'
+  | 'payments.refund'
+  | 'payments.reconcile'
+  | 'payments.providers.manage'
+
 export interface User extends RecordModel {
   id: string
   email: string
@@ -108,8 +132,32 @@ export interface User extends RecordModel {
   avatar?: string
   role?: UserRole
   active?: boolean
+  permissions?: AppPermission[] | string[]
+  is_super_admin?: boolean
   created: string
   updated: string
+}
+
+export type AuditLogResult = 'success' | 'blocked' | 'error'
+
+export interface AuditLog extends RecordModel {
+  id: string
+  actor?: string
+  target?: string
+  action: string
+  module: string
+  description?: string
+  ip?: string
+  user_agent?: string
+  before?: Record<string, any>
+  after?: Record<string, any>
+  result: AuditLogResult
+  created: string
+  updated: string
+  expand?: {
+    actor?: User
+    target?: User
+  }
 }
 
 export interface CompanySettings extends RecordModel {

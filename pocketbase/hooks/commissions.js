@@ -1,14 +1,16 @@
 // Comissões — endpoints para cálculo, listagem, resumo e gestão de status.
 //
 // Rotas registradas:
-//   POST /backend/v1/commissions/calculate         (Admin/Gerente) — calcula comissões do período
-//   GET  /backend/v1/commissions/list              (autenticado)   — lista comissões com filtros
-//   GET  /backend/v1/commissions/summary           (autenticado)   — totais/cards de resumo
-//   PUT  /backend/v1/commissions/{id}/status       (Admin/Gerente) — atualiza status
-//   GET  /backend/v1/commissions/sellers           (autenticado)   — vendedores + regras ativas
+//   POST /backend/v1/commissions/calculate         (commissions.create / Admin/Gerente)
+//   GET  /backend/v1/commissions/list              (commissions.view / autenticado)
+//   GET  /backend/v1/commissions/summary           (commissions.view / autenticado)
+//   PUT  /backend/v1/commissions/{id}/status       (commissions.approve/pay/edit / Admin/Gerente)
+//   GET  /backend/v1/commissions/sellers           (commissions.view / autenticado)
 //
-// NOTA: toda lógica é inline em cada callback (top-level helpers não são
-// acessíveis dentro dos callbacks no JSVM do PocketBase).
+// Envio transacional de email ao vendedor quando aprovada ou paga:
+// - Dados mínimos sem informações sensíveis
+// - Registro em email_logs com status (sent/failed)
+// - Falha no email não interrompe a transação da comissão
 
 // ===========================================================================
 // POST /backend/v1/commissions/calculate
@@ -18,13 +20,30 @@ routerAdd(
   'POST',
   '/backend/v1/commissions/calculate',
   (e) => {
-    // --- verifica role admin/gerente ---
-    if (!e.auth) {
-      return e.json(403, { message: 'Acesso restrito a administradores e gerentes.' })
+    const auth = e.auth
+    if (!auth) {
+      return e.json(403, { message: 'Acesso restrito.' })
     }
-    const role = e.auth.get('role')
-    if (role !== 'admin' && role !== 'gerente') {
-      return e.json(403, { message: 'Acesso restrito a administradores e gerentes.' })
+
+    const isSuper = auth.get('is_super_admin') === true
+    const role = auth.getString('role')
+    let perms = []
+    try {
+      const p = auth.get('permissions')
+      if (Array.isArray(p)) perms = p
+      else if (typeof p === 'string' && p) perms = JSON.parse(p)
+    } catch (_) {}
+
+    const canCalc =
+      isSuper ||
+      role === 'admin' ||
+      role === 'gerente' ||
+      perms.indexOf('commissions.create') !== -1
+
+    if (!canCalc) {
+      return e.json(403, {
+        message: 'Acesso restrito a administradores e gerentes (commissions.create).',
+      })
     }
 
     const body = e.requestInfo().body || {}
@@ -142,14 +161,36 @@ routerAdd(
   'GET',
   '/backend/v1/commissions/list',
   (e) => {
+    const auth = e.auth
+    if (!auth) {
+      return e.json(403, { message: 'Autenticação necessária.' })
+    }
+
+    const isSuper = auth.get('is_super_admin') === true
+    const role = auth.getString('role')
+    let perms = []
+    try {
+      const p = auth.get('permissions')
+      if (Array.isArray(p)) perms = p
+      else if (typeof p === 'string' && p) perms = JSON.parse(p)
+    } catch (_) {}
+
+    const isPrivileged =
+      isSuper || role === 'admin' || role === 'gerente' || perms.indexOf('commissions.view') !== -1
+
     const query = e.requestInfo().query || {}
     const filters = []
     const params = {}
 
-    if (query.seller_id) {
+    // Vendedor comum só enxerga as próprias comissões
+    if (!isPrivileged) {
+      filters.push('seller = {:sid}')
+      params.sid = auth.id
+    } else if (query.seller_id) {
       filters.push('seller = {:sid}')
       params.sid = query.seller_id
     }
+
     if (query.month && query.year) {
       const m = parseInt(query.month, 10)
       const y = parseInt(query.year, 10)
@@ -229,6 +270,23 @@ routerAdd(
   'GET',
   '/backend/v1/commissions/summary',
   (e) => {
+    const auth = e.auth
+    if (!auth) {
+      return e.json(403, { message: 'Autenticação necessária.' })
+    }
+
+    const isSuper = auth.get('is_super_admin') === true
+    const role = auth.getString('role')
+    let perms = []
+    try {
+      const p = auth.get('permissions')
+      if (Array.isArray(p)) perms = p
+      else if (typeof p === 'string' && p) perms = JSON.parse(p)
+    } catch (_) {}
+
+    const isPrivileged =
+      isSuper || role === 'admin' || role === 'gerente' || perms.indexOf('commissions.view') !== -1
+
     const query = e.requestInfo().query || {}
     let refMonth = ''
     if (query.month && query.year) {
@@ -241,6 +299,10 @@ routerAdd(
 
     const filters = []
     const params = {}
+    if (!isPrivileged) {
+      filters.push('seller = {:sid}')
+      params.sid = auth.id
+    }
     if (refMonth) {
       filters.push('reference_month = {:rm}')
       params.rm = refMonth
@@ -303,7 +365,6 @@ routerAdd(
 
     const avgTicket = comissionedSales > 0 ? totalSalesValue / comissionedSales : 0
 
-    // popula nome do vendedor
     const bySeller = []
     const sids = Object.keys(bySellerMap)
     for (let j = 0; j < sids.length; j++) {
@@ -344,16 +405,20 @@ routerAdd(
   'PUT',
   '/backend/v1/commissions/{id}/status',
   (e) => {
-    // --- verifica role admin/gerente ---
-    if (!e.auth) {
-      return e.json(403, { message: 'Acesso restrito a administradores e gerentes.' })
-    }
-    const role = e.auth.get('role')
-    if (role !== 'admin' && role !== 'gerente') {
-      return e.json(403, { message: 'Acesso restrito a administradores e gerentes.' })
+    const auth = e.auth
+    if (!auth) {
+      return e.json(403, { message: 'Acesso restrito.' })
     }
 
-    const id = e.request.pathValue('id')
+    const isSuper = auth.get('is_super_admin') === true
+    const role = auth.getString('role')
+    let perms = []
+    try {
+      const p = auth.get('permissions')
+      if (Array.isArray(p)) perms = p
+      else if (typeof p === 'string' && p) perms = JSON.parse(p)
+    } catch (_) {}
+
     const body = e.requestInfo().body || {}
     const newStatus = (body.status || '').toString()
 
@@ -371,6 +436,19 @@ routerAdd(
       })
     }
 
+    // Validação de permissão RBAC específica
+    let hasPerm = isSuper || role === 'admin'
+    if (role === 'gerente') hasPerm = true
+    if (newStatus === 'approved' && perms.indexOf('commissions.approve') !== -1) hasPerm = true
+    if (newStatus === 'paid' && perms.indexOf('commissions.pay') !== -1) hasPerm = true
+    if (perms.indexOf('commissions.edit') !== -1) hasPerm = true
+
+    if (!hasPerm) {
+      return e.json(403, { message: 'Sem permissão para alterar status de comissão.' })
+    }
+
+    const id = e.request.pathValue('id')
+
     let rec
     try {
       rec = $app.findRecordById('commissions', id)
@@ -383,7 +461,6 @@ routerAdd(
     const commissionValue = rec.get('commission_value') || 0
     const saleId = rec.get('sale') || ''
 
-    // Busca dados do pedido/cliente para montar a mensagem
     let customerName = ''
     let saleRef = ''
     try {
@@ -466,14 +543,14 @@ routerAdd(
       }
     })
 
-    // --- Envio de email ao aprovar/pagar comissão (após a transação) ---
-    // Se o envio falhar, NÃO interrompe o fluxo — apenas loga o erro.
-    // A transação da comissão + notificação in-app já foi commitada acima.
+    // --- Envio de email transacional ao vendedor (se aprovada ou paga) ---
+    // Falha não interrompe a comissão e registra o envio em email_logs sem vazar credenciais
     if (newStatus === 'approved' || newStatus === 'paid') {
+      let emailSendErr = ''
+      let sellerEmail = ''
+      let sellerName = 'Vendedor'
+
       try {
-        // Busca o email do vendedor na collection users
-        let sellerEmail = ''
-        let sellerName = 'Vendedor'
         try {
           const sellerRec = $app.findRecordById('users', sellerId)
           sellerEmail = sellerRec.get('email') || ''
@@ -484,9 +561,10 @@ routerAdd(
           const refMonth = rec.get('reference_month') || ''
           const valorStr = 'R$ ' + commissionValue.toFixed(2).replace('.', ',')
           const statusWord = newStatus === 'paid' ? 'paga' : 'aprovada'
-          const subject = 'VendasPro - Comissão ' + statusWord
+          const subject =
+            'VendasPro — Comissão ' + statusWord + ' (' + (saleRef || '#' + saleId.slice(-6)) + ')'
 
-          let siteUrl = $os.getenv('SITE_URL') || ''
+          let siteUrl = ($os.getenv('SITE_URL') || '').trim()
           while (siteUrl.length > 0 && siteUrl.charAt(siteUrl.length - 1) === '/') {
             siteUrl = siteUrl.substring(0, siteUrl.length - 1)
           }
@@ -500,9 +578,11 @@ routerAdd(
             '<p style="margin: 0 0 12px 0;">Olá, <strong>' +
             sellerName +
             '</strong>!</p>' +
-            '<p style="margin: 0 0 12px 0;">Sua comissão foi <strong>' +
+            '<p style="margin: 0 0 12px 0;">Sua comissão referente ao pedido <strong>' +
+            (saleRef || '#' + saleId.slice(-6)) +
+            '</strong> foi <strong>' +
             statusWord +
-            '</strong> no VendasPro.</p>' +
+            '</strong> no sistema.</p>' +
             '<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">' +
             '<tr><td style="padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; font-weight: 600;">Valor da comissão</td><td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' +
             valorStr +
@@ -516,51 +596,66 @@ routerAdd(
                 '</td></tr>'
               : '') +
             '</table>' +
-            '<p style="margin: 16px 0 8px 0;">Acesse o sistema para mais detalhes:</p>' +
+            '<p style="margin: 16px 0 8px 0;">Acesse o painel para visualizar o extrato completo:</p>' +
             '<p style="margin: 0;"><a href="' +
             linkComissoes +
-            '" style="display: inline-block; padding: 10px 18px; background: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600;">Ver minhas comissões</a></p>' +
+            '" style="display: inline-block; padding: 10px 18px; background: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600;">Acessar Comissões</a></p>' +
             '<hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;" />' +
-            '<p style="margin: 0; font-size: 12px; color: #94a3b8;">Este é um email automático do VendasPro. Não responda.</p>' +
+            '<p style="margin: 0; font-size: 12px; color: #94a3b8;">Notificação transacional automática gerada pelo VendasPro.</p>' +
             '</div>'
 
           // Configura SMTP a partir das variáveis de ambiente
-          const host = $os.getenv('SMTP_HOST') || ''
+          const host = ($os.getenv('SMTP_HOST') || '').trim()
           const port = parseInt($os.getenv('SMTP_PORT') || '587', 10)
-          const user = $os.getenv('SMTP_USER') || ''
-          const pass = $os.getenv('SMTP_PASSWORD') || ''
-          const fromAddr = $os.getenv('SMTP_FROM') || user || 'noreply@vendaspro.com'
+          const user = ($os.getenv('SMTP_USER') || '').trim()
+          const pass = ($os.getenv('SMTP_PASSWORD') || '').trim()
+          const fromAddr = ($os.getenv('SMTP_FROM') || user || 'noreply@vendaspro.com').trim()
 
-          if (host) {
-            const settings = $app.settings()
-            settings.smtp.host = host
-            settings.smtp.port = port
-            settings.smtp.username = user
-            settings.smtp.password = pass
-            settings.smtp.enabled = true
+          if (!host || !user || !pass) {
+            emailSendErr = 'SMTP_NOT_CONFIGURED: Servidor SMTP não configurado.'
+          } else {
+            try {
+              const settings = $app.settings()
+              settings.smtp.host = host
+              settings.smtp.port = port
+              settings.smtp.username = user
+              settings.smtp.password = pass
+              settings.smtp.enabled = true
+
+              const message = new MailerMessage({
+                from: {
+                  address: fromAddr,
+                  name: 'VendasPro',
+                },
+                to: [{ address: sellerEmail }],
+                subject: subject,
+                html: htmlBody,
+              })
+
+              $app.newMailClient().send(message)
+            } catch (smtpErr) {
+              const rawMsg = smtpErr && smtpErr.message ? smtpErr.message : String(smtpErr)
+              emailSendErr = rawMsg
+                .replace(new RegExp(pass.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '***')
+                .replace(new RegExp(user.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '***')
+            }
           }
 
-          const message = new MailerMessage({
-            from: {
-              address: fromAddr,
-              name: 'VendasPro',
-            },
-            to: [{ address: sellerEmail }],
-            subject: subject,
-            html: htmlBody,
-          })
-
-          $app.newMailClient().send(message)
+          // Registra resultado do envio em email_logs
+          try {
+            const emailCol = $app.findCollectionByNameOrId('email_logs')
+            const emailRec = new Record(emailCol)
+            emailRec.set('to_email', sellerEmail)
+            emailRec.set('subject', subject)
+            emailRec.set('body', 'Notificação de comissão ' + statusWord)
+            if (saleId) emailRec.set('sale', saleId)
+            emailRec.set('sent_by', auth.id)
+            emailRec.set('status', emailSendErr ? 'failed' : 'sent')
+            if (emailSendErr) emailRec.set('error_message', emailSendErr)
+            $app.save(emailRec)
+          } catch (_) {}
         }
-      } catch (emailErr) {
-        // Email falhou — não interrompe o fluxo, apenas loga.
-        console.log(
-          'Falha ao enviar email de comissão (' +
-            newStatus +
-            '): ' +
-            ((emailErr && emailErr.message) || emailErr),
-        )
-      }
+      } catch (_) {}
     }
 
     return e.json(200, {
