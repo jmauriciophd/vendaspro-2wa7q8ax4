@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import type { Customer, Product, User, PaymentMethod, PaymentStatus } from '@/types/crm'
 import { saleService } from '@/services/crm'
 import { toast } from 'sonner'
@@ -53,9 +53,9 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
   // Step 2: Items
   const [items, setItems] = useState<SaleItemDraft[]>([
     {
-      productId: products[0]?.id || '',
-      quantity: 10,
-      unitPrice: products[0]?.price || 0,
+      productId: '',
+      quantity: 1,
+      unitPrice: 0,
     },
   ])
 
@@ -67,9 +67,33 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Calculate total automatically
+  // Reset/reinitialize state whenever modal opens or reference data changes
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1)
+      setCustomerId(customers[0]?.id || '')
+      setSellerId(currentUserId || users[0]?.id || '')
+      setSaleDate(new Date().toISOString().split('T')[0])
+      setPaymentMethod('pix')
+      setPaymentStatus('pago')
+      setNotes('')
+      setErrors({})
+      setItems([
+        {
+          productId: '',
+          quantity: 1,
+          unitPrice: 0,
+        },
+      ])
+    }
+  }, [isOpen, customers, users, currentUserId])
+
+  // Calculate total automatically (only for items with valid productId)
   const totalAmount = useMemo(() => {
-    return items.reduce((acc, curr) => acc + (curr.quantity || 0) * (curr.unitPrice || 0), 0)
+    return items.reduce((acc, curr) => {
+      if (!curr.productId) return acc
+      return acc + (curr.quantity || 0) * (curr.unitPrice || 0)
+    }, 0)
   }, [items])
 
   if (!isOpen) return null
@@ -79,10 +103,17 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
     const newItems = [...items]
     newItems[index] = {
       productId: newProductId,
-      quantity: newItems[index].quantity || 1,
-      unitPrice: selectedProd ? selectedProd.price : newItems[index].unitPrice,
+      quantity: newItems[index]?.quantity > 0 ? newItems[index].quantity : 1,
+      unitPrice: selectedProd ? selectedProd.price : 0,
     }
     setItems(newItems)
+    if (errors.items) {
+      setErrors((prev) => {
+        const next = { ...prev }
+        delete next.items
+        return next
+      })
+    }
   }
 
   const handleQtyChange = (index: number, qty: number) => {
@@ -98,13 +129,12 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
   }
 
   const addItemRow = () => {
-    const firstProd = products[0]
     setItems((prev) => [
       ...prev,
       {
-        productId: firstProd?.id || '',
+        productId: '',
         quantity: 1,
-        unitPrice: firstProd?.price || 0,
+        unitPrice: 0,
       },
     ])
   }
@@ -128,10 +158,24 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
 
   const validateStep2 = () => {
     const errs: { [key: string]: string } = {}
-    if (items.length === 0) errs.items = 'Adicione ao menos um produto'
-    for (const it of items) {
-      if (!it.productId) errs.items = 'Selecione um produto em todas as linhas'
-      if (!it.quantity || it.quantity <= 0) errs.items = 'Quantidade inválida'
+    if (items.length === 0) {
+      errs.items = 'Adicione ao menos um produto'
+    } else {
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i]
+        if (!it.productId || it.productId.trim() === '') {
+          errs.items = 'Selecione um produto em todas as linhas'
+          break
+        }
+        if (!it.quantity || it.quantity <= 0) {
+          errs.items = `Linha ${i + 1}: Informe uma quantidade válida maior que 0`
+          break
+        }
+        if (it.unitPrice < 0) {
+          errs.items = `Linha ${i + 1}: Preço unitário não pode ser negativo`
+          break
+        }
+      }
     }
     setErrors(errs)
     return Object.keys(errs).length === 0
@@ -172,9 +216,7 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
       onClose()
       // Reset
       setStep(1)
-      setItems([
-        { productId: products[0]?.id || '', quantity: 1, unitPrice: products[0]?.price || 0 },
-      ])
+      setItems([{ productId: '', quantity: 1, unitPrice: 0 }])
       setNotes('')
     } catch (err: any) {
       console.error(err)
@@ -331,7 +373,9 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
 
               <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
                 {items.map((item, idx) => {
-                  const lineTotal = (item.quantity || 0) * (item.unitPrice || 0)
+                  const lineTotal = item.productId
+                    ? (item.quantity || 0) * (item.unitPrice || 0)
+                    : 0
 
                   return (
                     <div
@@ -345,8 +389,13 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
                         <select
                           value={item.productId}
                           onChange={(e) => handleProductChange(idx, e.target.value)}
-                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg outline-none focus:border-indigo-600"
+                          className={`w-full px-2.5 py-1.5 text-xs bg-white border rounded-lg outline-none ${
+                            !item.productId && errors.items
+                              ? 'border-red-500 ring-1 ring-red-200'
+                              : 'border-slate-200 focus:border-indigo-600'
+                          }`}
                         >
+                          <option value="">Selecione um produto...</option>
                           {products.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.name} ({p.unit || 'un'}) - R$ {p.price?.toFixed(2)}
@@ -374,7 +423,7 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
                         </label>
                         <input
                           type="number"
-                          step="0.1"
+                          step="0.01"
                           value={item.unitPrice}
                           onChange={(e) => handlePriceChange(idx, parseFloat(e.target.value) || 0)}
                           className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg outline-none focus:border-indigo-600"
