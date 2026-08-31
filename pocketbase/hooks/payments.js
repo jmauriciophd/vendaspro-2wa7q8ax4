@@ -340,9 +340,9 @@ routerAdd(
     const role = e.auth.get('role') || 'vendedor'
     const body = e.requestInfo().body || {}
 
-    const saleId = (body.sale_id || '').toString()
-    const providerId = (body.provider_id || '').toString()
-    const method = (body.payment_method || '').toString()
+    const saleId = (body.sale_id || '').toString().trim()
+    const providerId = (body.provider_id || '').toString().trim()
+    const method = (body.payment_method || '').toString().trim().toLowerCase()
     if (!saleId || !providerId || !method) {
       return e.json(400, { message: 'sale_id, provider_id e payment_method são obrigatórios.' })
     }
@@ -369,7 +369,12 @@ routerAdd(
     }
     const provSlug = (provider.get('slug') || '').toString().toLowerCase()
     const provEnv = (provider.get('environment') || 'sandbox').toString().toLowerCase()
-    const provMethods = provider.get('methods') || []
+    const rawProvMethods = provider.get('methods') || []
+    const provMethods = Array.isArray(rawProvMethods)
+      ? rawProvMethods.map(function (m) {
+          return String(m || '').trim().toLowerCase()
+        })
+      : []
     let methodOk = false
     for (let i = 0; i < provMethods.length; i++) {
       if (provMethods[i] === method) {
@@ -378,15 +383,20 @@ routerAdd(
       }
     }
 
-    // Se o provedor for Mercado Pago em sandbox e o array de métodos vier vazio (ex: erro de config inicial),
+    // Se o provedor for Mercado Pago e o array de métodos vier vazio (ou em sandbox),
     // garante suporte aos métodos pix, boleto e link
     if (
       !methodOk &&
       provSlug === 'mercadopago' &&
-      provEnv === 'sandbox' &&
-      (!provMethods || provMethods.length === 0)
+      (!provMethods || provMethods.length === 0 || provEnv === 'sandbox')
     ) {
-      if (method === 'pix' || method === 'boleto' || method === 'link') {
+      if (
+        method === 'pix' ||
+        method === 'boleto' ||
+        method === 'link' ||
+        method === 'credit_card' ||
+        method === 'debit_card'
+      ) {
         methodOk = true
       }
     }
