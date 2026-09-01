@@ -30,6 +30,14 @@ export function usePaymentStatus({
   const [isPolling, setIsPolling] = useState<boolean>(false)
   const previousStatusRef = useRef<ChargeStatus | undefined>(initialCharge?.status)
 
+  // Armazena callback e chargeId em refs para imunizar efeitos e callbacks contra re-renders
+  const onStatusChangeRef = useRef(onStatusChange)
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange
+  }, [onStatusChange])
+
+  const lastFetchedChargeIdRef = useRef<string | undefined>(undefined)
+
   // Atualiza estado inicial se prop mudar
   useEffect(() => {
     if (initialCharge) {
@@ -46,12 +54,13 @@ export function usePaymentStatus({
         const data = await paymentService.getCharge(chargeId)
         setCharge(data)
         setError(null)
+        lastFetchedChargeIdRef.current = chargeId
 
         if (data && data.status !== previousStatusRef.current) {
           const oldStatus = previousStatusRef.current
           previousStatusRef.current = data.status
-          if (oldStatus !== undefined && onStatusChange) {
-            onStatusChange(data.status, data)
+          if (oldStatus !== undefined && onStatusChangeRef.current) {
+            onStatusChangeRef.current(data.status, data)
           }
         }
         return data
@@ -63,14 +72,16 @@ export function usePaymentStatus({
         if (!isBackground) setLoading(false)
       }
     },
-    [chargeId, onStatusChange],
+    [chargeId],
   )
 
   useEffect(() => {
     if (!chargeId) return
 
-    // Carga inicial
-    fetchStatus(false)
+    // Carga inicial apenas se for a primeira vez ou se o chargeId mudou
+    if (lastFetchedChargeIdRef.current !== chargeId) {
+      fetchStatus(false)
+    }
 
     if (!enabled) return
 

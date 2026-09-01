@@ -9,6 +9,7 @@ import {
   Calendar,
   User,
   Hash,
+  Info,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { paymentService, formatMoney } from '@/services/paymentService'
@@ -54,6 +55,7 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
   const brickContainerRef = useRef<HTMLDivElement>(null)
   const [sdkLoaded, setSdkLoaded] = useState(false)
   const [brickRendered, setBrickRendered] = useState(false)
+  const [brickFallbackNotice, setBrickFallbackNotice] = useState(false)
   const brickAttemptedRef = useRef(false)
 
   // Detecta bandeira pelo prefixo do número do cartão
@@ -208,8 +210,9 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
                 error,
               )
               // Em caso de erro na inicialização do Bricks (ex: 404 em payment_methods/search),
-              // mantemos brickRendered = false para o formulário nativo permanecer ativo e funcional.
+              // capturamos silenciosamente e liberamos imediatamente o formulário nativo
               setBrickRendered(false)
+              setBrickFallbackNotice(true)
             },
           },
         }
@@ -225,6 +228,7 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
           } catch (createErr) {
             console.warn('Bricks.create falhou (fallback ativo para checkout nativo):', createErr)
             setBrickRendered(false)
+            setBrickFallbackNotice(true)
           }
         }
       }
@@ -232,10 +236,12 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
       renderCardPaymentBrick(bricksBuilder).catch((err) => {
         console.warn('Erro na promessa do Brick:', err)
         setBrickRendered(false)
+        setBrickFallbackNotice(true)
       })
     } catch (e) {
       console.warn('Erro ao configurar instância do Mercado Pago:', e)
       setBrickRendered(false)
+      setBrickFallbackNotice(true)
     }
 
     return () => {
@@ -393,6 +399,19 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
 
       {/* Container para Mercado Pago Bricks oficial quando disponível */}
       <div id="cardPaymentBrick_container" ref={brickContainerRef} />
+
+      {/* Aviso informativo amigável de fallback quando o Bricks avançado não inicializa */}
+      {!brickRendered && brickFallbackNotice && (
+        <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 flex items-start gap-2.5 text-xs text-blue-800 animate-in fade-in">
+          <Info className="w-4 h-4 shrink-0 text-blue-600 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold">
+              Checkout avançado indisponível no momento. Usando formulário de pagamento seguro
+              padrão.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Formulário Integrado Embutido (Renderização Garantida e Limpa) */}
       {!brickRendered && (

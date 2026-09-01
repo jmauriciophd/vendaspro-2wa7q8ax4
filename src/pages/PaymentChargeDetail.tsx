@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -57,6 +57,15 @@ export default function PaymentChargeDetail() {
   const [refundOpen, setRefundOpen] = useState(false)
   const [regenerateOpen, setRegenerateOpen] = useState(false)
 
+  // Callback de mudança de status memoizado para evitar re-renderizações e loops
+  const handleStatusChange = useCallback((newStatus: any) => {
+    if (newStatus === 'paid') {
+      toast.success('🎉 Pagamento aprovado com sucesso!')
+    } else if (newStatus === 'failed') {
+      toast.error('Pagamento recusado.')
+    }
+  }, [])
+
   // Hook de polling e status automático
   const {
     charge,
@@ -67,13 +76,7 @@ export default function PaymentChargeDetail() {
   } = usePaymentStatus({
     chargeId: id,
     pollingIntervalMs: 3500,
-    onStatusChange: (newStatus) => {
-      if (newStatus === 'paid') {
-        toast.success('🎉 Pagamento aprovado com sucesso!')
-      } else if (newStatus === 'failed') {
-        toast.error('Pagamento recusado.')
-      }
-    },
+    onStatusChange: handleStatusChange,
   })
 
   const canCancel = charge && (charge.status === 'pending' || charge.status === 'waiting_payment')
