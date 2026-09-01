@@ -123,12 +123,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(model as unknown as User | null)
     })
 
-    if (pb.authStore.isValid && pb.authStore.record) {
-      setUser(pb.authStore.record as unknown as User)
-    } else {
-      setUser(null)
+    const initAuth = async () => {
+      if (pb.authStore.isValid && pb.authStore.token) {
+        try {
+          const authData = await pb.collection('users').authRefresh<User>()
+          setUser(authData.record)
+        } catch (err) {
+          console.warn('Sessão expirada ou inválida ao atualizar token:', err)
+          pb.authStore.clear()
+          setUser(null)
+        }
+      } else {
+        pb.authStore.clear()
+        setUser(null)
+      }
+      setIsLoading(false)
     }
-    setIsLoading(false)
+
+    initAuth()
 
     return () => {
       unsub()

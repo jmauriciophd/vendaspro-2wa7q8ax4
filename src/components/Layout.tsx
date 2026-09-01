@@ -60,7 +60,7 @@ export default function Layout() {
   const remindersRef = useRef<HTMLDivElement>(null)
 
   const loadReminders = async () => {
-    if (!user) return
+    if (!user || isLoading) return
     try {
       const data = await reminderService.getPending(user.id)
       setReminders(data)
@@ -87,6 +87,7 @@ export default function Layout() {
   }, [])
 
   const loadCompany = async () => {
+    if (!user || isLoading) return
     try {
       const c = await companyService.get()
       setCompany(c)
@@ -95,8 +96,10 @@ export default function Layout() {
     }
   }
   useEffect(() => {
-    loadCompany()
-  }, [])
+    if (user && !isLoading) {
+      loadCompany()
+    }
+  }, [user, isLoading])
 
   // Global search state
   const [searchQuery, setSearchQuery] = useState('')

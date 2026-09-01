@@ -233,8 +233,8 @@ export default function FinancialReport() {
                 </p>
               </div>
             </div>
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-72 min-h-[288px] w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 <BarChart
                   data={data.by_month}
                   margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
@@ -335,8 +335,8 @@ export default function FinancialReport() {
                 </div>
                 <h3 className="text-base font-bold text-slate-800">Métodos de Pagamento</h3>
               </div>
-              <div className="h-56 w-full flex-1">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-56 min-h-[224px] w-full min-w-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
                   <PieChart>
                     <Pie
                       data={data.by_method.map((m) => ({ name: m.method, value: m.valor_total }))}

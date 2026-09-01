@@ -569,8 +569,8 @@ export default function Relatorios() {
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
             <h3 className="text-sm font-bold text-slate-800 mb-1">Valor de NF-es por Mês</h3>
             <p className="text-xs text-slate-400 mb-4">Total faturado em notas fiscais (R$)</p>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-64 min-h-[256px] w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                 <BarChart
                   data={fiscalByMonth}
                   margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
@@ -765,8 +765,8 @@ export default function Relatorios() {
               <h3 className="text-sm font-bold text-slate-800 mb-1">Receita por Mês no Período</h3>
               <p className="text-xs text-slate-400 mb-4">Total faturado em Reais (R$)</p>
 
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-64 min-h-[256px] w-full min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                   <BarChart
                     data={revenueByMonthChart}
                     margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
@@ -803,8 +803,8 @@ export default function Relatorios() {
               </h3>
               <p className="text-xs text-slate-400 mb-4">Faturamento por departamento</p>
 
-              <div className="h-56 w-full flex-1">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-56 min-h-[224px] w-full min-w-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
                   <PieChart>
                     <Pie
                       data={salesByCategoryChart}
@@ -857,8 +857,8 @@ export default function Relatorios() {
                 Classificação por receita total faturada
               </p>
 
-              <div className="h-60 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-60 min-h-[240px] w-full min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                   <BarChart
                     layout="vertical"
                     data={topProductsChart}
@@ -905,8 +905,8 @@ export default function Relatorios() {
                 Mercadinhos que mais geraram faturamento
               </p>
 
-              <div className="h-60 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-60 min-h-[240px] w-full min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                   <BarChart
                     layout="vertical"
                     data={topCustomersChart}
@@ -983,8 +983,8 @@ export default function Relatorios() {
               <h3 className="text-sm font-bold text-slate-800 mb-1">Vendas por Vendedor</h3>
               <p className="text-xs text-slate-400 mb-4">Desempenho da equipe comercial</p>
 
-              <div className="h-60 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-60 min-h-[240px] w-full min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                   <BarChart
                     data={salesBySellerChart}
                     margin={{ top: 10, right: 10, left: -10, bottom: 0 }}

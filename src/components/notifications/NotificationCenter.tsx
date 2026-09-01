@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, CheckCheck, CheckCircle2, ChevronRight } from 'lucide-react'
+import pb from '@/lib/pocketbase/client'
 import { notificationService } from '@/services/modules'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { AppNotification } from '@/types/modules'
@@ -39,10 +40,12 @@ export function NotificationCenter() {
   const ref = useRef<HTMLDivElement>(null)
 
   const loadUnread = useCallback(async () => {
+    if (!pb.authStore.isValid || !pb.authStore.token) return
     try {
       const res = await notificationService.unreadCount()
-      setUnread(res.count || 0)
+      setUnread(res?.count || 0)
     } catch (e) {
+      // Ignora erro se não autenticado ainda
       console.error(e)
     }
   }, [])

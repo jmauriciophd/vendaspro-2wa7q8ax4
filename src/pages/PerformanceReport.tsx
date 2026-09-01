@@ -367,8 +367,8 @@ export default function PerformanceReport() {
             </p>
           </div>
 
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-72 min-h-[288px] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <BarChart
                 layout="vertical"
                 data={barData}
@@ -418,8 +418,8 @@ export default function PerformanceReport() {
         {evolutionChartData.length === 0 ? (
           <div className="py-10 text-center text-xs text-slate-400">Carregando evolução...</div>
         ) : (
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-72 min-h-[288px] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <LineChart
                 data={evolutionChartData}
                 margin={{ top: 10, right: 20, left: 0, bottom: 0 }}

@@ -665,8 +665,8 @@ export default function Index() {
             </div>
           </div>
 
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-64 min-h-[256px] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
               <AreaChart
                 data={monthlySalesChart}
                 margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
@@ -720,8 +720,8 @@ export default function Index() {
             <p className="text-xs text-slate-400 mt-0.5">Distribuição do número de oportunidades</p>
           </div>
 
-          <div className="h-56 w-full flex-1">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-56 min-h-[224px] w-full min-w-0 flex-1">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
               <PieChart>
                 <Pie
                   data={pipelineDonutChart}
@@ -777,8 +777,8 @@ export default function Index() {
             <p className="text-xs text-slate-400 mt-0.5">Ranking comercial por receita fechada</p>
           </div>
 
-          <div className="h-60 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-60 min-h-[240px] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
               <BarChart
                 layout="vertical"
                 data={salesBySellerChart}
