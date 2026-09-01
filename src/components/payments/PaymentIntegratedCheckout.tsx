@@ -56,6 +56,7 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
   const [sdkLoaded, setSdkLoaded] = useState(false)
   const [brickRendered, setBrickRendered] = useState(false)
   const [brickFallbackNotice, setBrickFallbackNotice] = useState(false)
+  const [cardUnavailable, setCardUnavailable] = useState(false)
   const brickAttemptedRef = useRef(false)
 
   // Detecta bandeira pelo prefixo do número do cartão
@@ -288,11 +289,17 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
       return
     }
 
+    const isMpProvider =
+      charge.provider_slug === 'mercadopago' ||
+      (charge.provider_public_key &&
+        (charge.provider_public_key.startsWith('TEST-') ||
+          charge.provider_public_key.startsWith('APP_USR-')))
+
     setSubmitting(true)
     try {
       let cardToken = ''
 
-      // Se o SDK do Mercado Pago estiver disponível, gera token oficial no browser
+      // Se o SDK do Mercado Pago estiver disponível, tenta gerar token oficial no browser
       if (window.MercadoPago && charge.provider_public_key) {
         try {
           const mp = new window.MercadoPago(charge.provider_public_key)
@@ -311,12 +318,23 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
             cardToken = tokenRes.id
           }
         } catch (tokErr) {
-          console.warn('Geração de token client-side falhou, usando token integrado:', tokErr)
+          console.warn('Geração de token de cartão no SDK falhou:', tokErr)
         }
       }
 
+      // Se é Mercado Pago com chave configurada e não foi possível obter card_token_id válido
+      if (isMpProvider && !cardToken) {
+        setCardUnavailable(true)
+        const unavailMsg =
+          'Pagamento com cartão temporariamente indisponível pelo gateway. Por favor, use PIX ou boleto para pagar.'
+        setPaymentError(unavailMsg)
+        toast.error(unavailMsg)
+        setSubmitting(false)
+        return
+      }
+
       if (!cardToken) {
-        // Token simulado seguro para testes ou fallback
+        // Apenas para provedores simulados ou ambientes locais sem chave real
         cardToken = 'tok_' + Math.random().toString(36).substring(2, 15)
       }
 
@@ -338,11 +356,19 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
         toast.success(res.message || 'Pagamento com cartão aprovado!')
         if (onPaymentSuccess) onPaymentSuccess()
       } else {
-        setPaymentError(res.message || 'Pagamento recusado.')
-        toast.error(res.message || 'Pagamento recusado.')
+        const errorMsg = res.message || 'Pagamento recusado.'
+        setPaymentError(errorMsg)
+        toast.error(errorMsg)
       }
     } catch (err: any) {
-      const msg = err?.response?.message || err?.message || 'Erro ao processar pagamento.'
+      let msg = err?.response?.message || err?.message || 'Erro ao processar pagamento com cartão.'
+      if (
+        String(msg).toLowerCase().includes('card_token_id') ||
+        String(msg).toLowerCase().includes('invalid card_token_id')
+      ) {
+        msg = 'Pagamento com cartão temporariamente indisponível. Por favor, utilize PIX ou boleto.'
+        setCardUnavailable(true)
+      }
       setPaymentError(msg)
       toast.error(msg)
     } finally {
@@ -400,21 +426,41 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
       {/* Container para Mercado Pago Bricks oficial quando disponível */}
       <div id="cardPaymentBrick_container" ref={brickContainerRef} />
 
+      {/* Aviso quando o pagamento com cartão estiver indisponível */}
+      {cardUnavailable ? (
+        <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 space-y-3 animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <h5 className="text-xs font-bold uppercase tracking-wider text-amber-950">
+                Cartão de Crédito Temporariamente Indisponível
+              </h5>
+              <p className="text-xs text-amber-800 mt-1">
+                A validação com a operadora de cartão está temporariamente fora do ar. Você pode
+                efetuar o pagamento imediatamente escolhendo <strong>PIX</strong> ou{' '}
+                <strong>Boleto</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* Aviso informativo amigável de fallback quando o Bricks avançado não inicializa */}
-      {!brickRendered && brickFallbackNotice && (
+      {!brickRendered && brickFallbackNotice && !cardUnavailable && (
         <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 flex items-start gap-2.5 text-xs text-blue-800 animate-in fade-in">
           <Info className="w-4 h-4 shrink-0 text-blue-600 mt-0.5" />
           <div className="flex-1">
             <p className="font-semibold">
-              Checkout avançado indisponível no momento. Usando formulário de pagamento seguro
-              padrão.
+              Checkout transparente padrão ativo para recebimento seguro.
             </p>
           </div>
         </div>
       )}
 
       {/* Formulário Integrado Embutido (Renderização Garantida e Limpa) */}
-      {!brickRendered && (
+      {!brickRendered && !cardUnavailable && (
         <form
           onSubmit={handleNativeSubmit}
           className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4"

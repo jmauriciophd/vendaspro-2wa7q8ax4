@@ -3601,8 +3601,20 @@ routerAdd('POST', '/backend/v1/payments/charges/{id}/process-integrated', (e) =>
     pad(now.getUTCSeconds()) +
     '.000Z'
 
-  // Processamento via API Oficial do Mercado Pago
-  if (isRealKey && token) {
+  // Validação: se o provedor for Mercado Pago com chave real, exige card_token_id válido gerado pelo SDK
+  const isMercadoPago =
+    provider && (provider.get('slug') || '').toString().toLowerCase() === 'mercadopago'
+  const isSyntheticToken = !token || token.startsWith('tok_') || token.length < 10
+
+  if (isMercadoPago && isRealKey) {
+    if (isSyntheticToken) {
+      return e.json(400, {
+        success: false,
+        message:
+          'Pagamento com cartão de crédito temporariamente indisponível pelo gateway. Por favor, utilize PIX ou boleto para concluir o pagamento.',
+      })
+    }
+
     try {
       const mpPayBody = {
         transaction_amount: finalAmount,
@@ -3715,21 +3727,44 @@ routerAdd('POST', '/backend/v1/payments/charges/{id}/process-integrated', (e) =>
           })
         }
       } else {
-        const errDetail =
+        let rawErr =
           res &&
           res.json &&
-          (res.json.message || res.json.error || res.json.cause?.[0]?.description)
-            ? res.json.message || res.json.error || res.json.cause?.[0]?.description
+          (res.json.message ||
+            res.json.error ||
+            (res.json.cause && res.json.cause[0] && res.json.cause[0].description))
+            ? res.json.message || res.json.error || res.json.cause[0].description
             : 'Falha ao processar pagamento com cartão'
+
+        let friendlyMsg = 'Não foi possível processar o pagamento com cartão.'
+        const lowerErr = String(rawErr).toLowerCase()
+        if (
+          lowerErr.includes('card_token_id') ||
+          lowerErr.includes('invalid card_token_id') ||
+          lowerErr.includes('token not found')
+        ) {
+          friendlyMsg =
+            'Pagamento com cartão temporariamente indisponível. Por favor, realize o pagamento via PIX ou Boleto.'
+        } else if (
+          lowerErr.includes('unauthorized') ||
+          lowerErr.includes('invalid credentials') ||
+          res.statusCode === 401
+        ) {
+          friendlyMsg =
+            'As credenciais do gateway de pagamento estão inválidas. Por favor, utilize PIX ou boleto.'
+        } else {
+          friendlyMsg = 'Erro no processamento: ' + rawErr
+        }
+
         return e.json(400, {
           success: false,
-          message: 'Erro no Mercado Pago: ' + errDetail,
+          message: friendlyMsg,
         })
       }
     } catch (errMP) {
       return e.json(400, {
         success: false,
-        message: 'Erro de comunicação ao processar cartão: ' + String(errMP),
+        message: 'Erro de comunicação ao processar cartão. Por favor, tente via PIX ou boleto.',
       })
     }
   }
