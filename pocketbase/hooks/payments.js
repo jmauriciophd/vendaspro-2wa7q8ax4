@@ -360,6 +360,40 @@ routerAdd(
       return e.json(403, { message: 'Você só pode gerar cobranças para suas próprias vendas.' })
     }
 
+    // Trava de duplicidade: não permite criar nova cobrança se já houver uma cobrança ativa (pending, waiting_payment, processing) ou já paga
+    try {
+      const activeCharges = $app.findRecordsByFilter(
+        'payment_charges',
+        'sale_id = {:saleId} && (status = "pending" || status = "waiting_payment" || status = "processing" || status = "paid")',
+        '-created',
+        1,
+        0,
+        { saleId: saleId },
+      )
+      if (activeCharges && activeCharges.length > 0) {
+        const existing = activeCharges[0]
+        const st = existing.get('status') || ''
+        if (st === 'paid') {
+          return e.json(400, {
+            message:
+              'Esta venda já possui um pagamento aprovado e quitado (Cobrança #' +
+              (existing.get('external_charge_id') || existing.id) +
+              '). Não é permitido gerar nova cobrança.',
+            charge_id: existing.id,
+          })
+        }
+        return e.json(400, {
+          message:
+            'Já existe uma cobrança ativa para esta venda (Cobrança #' +
+            (existing.get('external_charge_id') || existing.id) +
+            '). Cancele a anterior ou aguarde a compensação para gerar outra.',
+          charge_id: existing.id,
+        })
+      }
+    } catch (chkErr) {
+      // Se der erro no findRecordsByFilter repassa log mas continua apenas se for erro inesperado
+    }
+
     // valida provedor
     let provider
     try {
@@ -3724,3 +3758,48 @@ routerAdd('POST', '/backend/v1/payments/charges/{id}/process-integrated', (e) =>
     charge_id: charge.id,
   })
 })
+
+// ---------------------------------------------------------------------------
+// Validação global contra duplicidade de cobranças ativas na collection `payment_charges`
+// Bloqueia qualquer inserção direta (via SDK ou API) de cobrança se já houver
+// uma cobrança com status pending, waiting_payment, processing ou paid para a mesma venda.
+// ---------------------------------------------------------------------------
+onRecordCreateRequest((e) => {
+  const record = e.record
+  const saleId = (record.get('sale_id') || '').toString().trim()
+  if (!saleId) {
+    return e.next()
+  }
+
+  try {
+    const existingActive = $app.findRecordsByFilter(
+      'payment_charges',
+      'sale_id = {:saleId} && (status = "pending" || status = "waiting_payment" || status = "processing" || status = "paid")',
+      '-created',
+      1,
+      0,
+      { saleId: saleId },
+    )
+    if (existingActive && existingActive.length > 0) {
+      const ex = existingActive[0]
+      const st = ex.get('status') || ''
+      if (st === 'paid') {
+        throw new BadRequestError(
+          'Esta venda já possui pagamento concluído (Cobrança #' +
+            (ex.get('external_charge_id') || ex.id) +
+            '). Não é possível gerar cobrança duplicada.',
+        )
+      }
+      throw new BadRequestError(
+        'Já existe uma cobrança ativa para esta venda (Cobrança #' +
+          (ex.get('external_charge_id') || ex.id) +
+          '). Cancele a anterior para gerar uma nova.',
+      )
+    }
+  } catch (err) {
+    if (err instanceof BadRequestError) throw err
+    // Outros erros inesperados
+  }
+
+  return e.next()
+}, 'payment_charges')

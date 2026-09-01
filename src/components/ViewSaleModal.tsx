@@ -609,14 +609,102 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   Documentos Fiscais & Envio
                 </p>
+                {(() => {
+                  const activeCharge = charges.find(
+                    (c) =>
+                      c.status === 'pending' ||
+                      c.status === 'waiting_payment' ||
+                      (c.status as string) === 'processing',
+                  )
+                  const paidCharge = charges.find((c) => c.status === 'paid')
+                  const isPaid = sale.payment_status === 'pago' || Boolean(paidCharge)
+
+                  if (isPaid) {
+                    return (
+                      <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 text-xs text-emerald-800">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span className="font-semibold">Venda quitada com sucesso</span>
+                        </div>
+                        {paidCharge && (
+                          <button
+                            onClick={() => navigate(`/financeiro/cobrancas/${paidCharge.id}`)}
+                            className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-white border border-emerald-200 rounded-lg shadow-xs hover:bg-emerald-50 transition-colors"
+                          >
+                            Ver cobrança
+                          </button>
+                        )}
+                      </div>
+                    )
+                  }
+
+                  if (activeCharge) {
+                    return (
+                      <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl flex items-center justify-between gap-2 text-xs text-amber-900">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                          <div className="min-w-0">
+                            <span className="font-semibold block truncate">
+                              Cobrança ativa #
+                              {activeCharge.external_charge_id ||
+                                activeCharge.id.slice(-6).toUpperCase()}
+                            </span>
+                            <span className="text-[10px] text-amber-700 block">
+                              Aguardando pagamento • R${' '}
+                              {(activeCharge.final_amount || 0).toFixed(2).replace('.', ',')}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigate(`/financeiro/cobrancas/${activeCharge.id}`)}
+                          className="px-2.5 py-1 text-[11px] font-bold text-amber-800 hover:text-amber-950 bg-white border border-amber-300 rounded-lg shadow-xs hover:bg-amber-50 transition-colors shrink-0"
+                        >
+                          Ver cobrança
+                        </button>
+                      </div>
+                    )
+                  }
+
+                  return null
+                })()}
+
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setChargeModalOpen(true)}
-                    className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors cursor-pointer"
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    <span>Gerar pagamento</span>
-                  </button>
+                  {(() => {
+                    const activeCharge = charges.find(
+                      (c) =>
+                        c.status === 'pending' ||
+                        c.status === 'waiting_payment' ||
+                        (c.status as string) === 'processing',
+                    )
+                    const paidCharge = charges.find((c) => c.status === 'paid')
+                    const isPaid = sale.payment_status === 'pago' || Boolean(paidCharge)
+                    const isDisabled = isPaid || Boolean(activeCharge)
+
+                    return (
+                      <button
+                        onClick={() => {
+                          if (isDisabled) return
+                          setChargeModalOpen(true)
+                        }}
+                        disabled={isDisabled}
+                        title={
+                          isPaid
+                            ? 'Venda já paga. Não é permitido gerar nova cobrança.'
+                            : activeCharge
+                              ? 'Já existe uma cobrança ativa pendente para este pedido.'
+                              : 'Gerar link/boleto/pix de pagamento para o cliente'
+                        }
+                        className={`flex items-center gap-2 px-3 py-2.5 text-xs font-semibold rounded-xl border transition-colors ${
+                          isDisabled
+                            ? 'text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60'
+                            : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200 cursor-pointer'
+                        }`}
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        <span>{isDisabled ? 'Cobrança existente' : 'Gerar pagamento'}</span>
+                      </button>
+                    )
+                  })()}
                   <button
                     onClick={() => {
                       setDocTab('nfe')

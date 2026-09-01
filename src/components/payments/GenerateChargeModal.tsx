@@ -157,9 +157,14 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
         onGenerated?.(res.id)
         onClose()
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      const msg = (err as any)?.response?.message || 'Erro ao gerar cobrança.'
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.message ||
+        err?.data?.message ||
+        err?.message ||
+        'Erro ao gerar cobrança.'
       toast.error(msg)
     } finally {
       setSubmitting(false)
