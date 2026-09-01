@@ -45,20 +45,37 @@ export const PixDisplay: React.FC<PixDisplayProps> = ({ pixCode, qrcode, classNa
   return (
     <div className={`space-y-3 ${className}`}>
       <div className="flex flex-col items-center gap-3 p-4 bg-white border border-slate-200 rounded-2xl">
-        <div className="w-44 h-44 bg-white border-2 border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 p-3 overflow-hidden">
+        <div className="w-52 h-52 bg-white border-2 border-slate-200 rounded-xl flex flex-col items-center justify-center p-2 overflow-hidden shadow-xs relative">
           {normalizedQrCodeSrc ? (
             <img
               src={normalizedQrCodeSrc}
               alt="QR Code PIX"
               className="w-full h-full object-contain"
+              onError={(e) => {
+                // Fallback dinâmico caso ocorra erro ao carregar imagem externa
+                e.currentTarget.onerror = null
+                if (pixCode) {
+                  e.currentTarget.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+                    pixCode,
+                  )}`
+                }
+              }}
+            />
+          ) : pixCode ? (
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+                pixCode,
+              )}`}
+              alt="QR Code PIX"
+              className="w-full h-full object-contain"
             />
           ) : (
-            <>
-              <QrCode className="w-20 h-20 text-slate-800" />
-              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+            <div className="flex flex-col items-center justify-center gap-2 text-slate-400">
+              <QrCode className="w-20 h-20 text-slate-700" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider">
                 QR Code PIX
               </span>
-            </>
+            </div>
           )}
         </div>
         <p className="text-[11px] text-slate-500 text-center max-w-[220px]">

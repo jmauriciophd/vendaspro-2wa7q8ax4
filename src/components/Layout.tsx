@@ -189,7 +189,7 @@ export default function Layout() {
   if (!user && isPublicRoute) {
     return (
       <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
-        {/* Header público limpo */}
+        {/* Header público limpo — totalmente focado no checkout sem links administrativos */}
         <header className="sticky top-0 z-20 h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
@@ -198,16 +198,14 @@ export default function Layout() {
             <div>
               <h1 className="text-sm font-bold text-slate-900 leading-tight">VendasPro</h1>
               <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
-                Ambiente de Pagamento
+                Ambiente de Pagamento Seguro
               </span>
             </div>
           </div>
-          <NavLink
-            to="/login"
-            className="px-3.5 py-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors"
-          >
-            Acessar Sistema
-          </NavLink>
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Ambiente Seguro</span>
+          </div>
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-4xl w-full mx-auto">

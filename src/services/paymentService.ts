@@ -146,6 +146,17 @@ export const paymentService = {
     })
   },
 
+  // ----- Integrated Checkout (Bricks / Transparente) -----
+  async processIntegratedPayment(
+    id: string,
+    data: import('@/types/payments').IntegratedPaymentInput,
+  ): Promise<import('@/types/payments').IntegratedPaymentResult> {
+    return await pb.send(`${BASE}/charges/${id}/process-integrated`, {
+      method: 'POST',
+      body: data,
+    })
+  },
+
   // ----- Dashboards -----
   async dashboard(): Promise<PaymentsDashboard> {
     return await pb.send(`${BASE}/dashboard`, { method: 'GET' })

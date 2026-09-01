@@ -172,10 +172,34 @@ export interface PaymentChargeDetail extends PaymentChargeListItem {
   invoice_id: string
   financial_account_id: string
   provider_slug: string
+  provider_public_key?: string
+  provider_environment?: PaymentEnvironment
   pix_qrcode: string
   provider_response: Record<string, unknown>
   created_by: string
   timeline: ChargeAuditEntry[]
+}
+
+export interface IntegratedPaymentInput {
+  token?: string
+  payment_method_id?: string
+  installments?: number
+  issuer_id?: string
+  payer?: {
+    email?: string
+    identification?: {
+      type: string
+      number: string
+    }
+  }
+}
+
+export interface IntegratedPaymentResult {
+  success: boolean
+  status: ChargeStatus
+  message: string
+  charge_id: string
+  details?: Record<string, unknown>
 }
 
 // Dados de boleto compartilhados entre list/detail/result.
