@@ -18,6 +18,7 @@ import {
   formatMoney,
   formatDate,
   formatBoletoDigitableLine,
+  resolvePaymentUrl,
 } from '@/services/paymentService'
 import type { PaymentProvider, PaymentMethod, CreateChargeResult } from '@/types/payments'
 import type { Sale } from '@/types/crm'
@@ -249,7 +250,7 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
               {/* Boleto visual */}
               <BoletoView
                 boleto={{
-                  boleto_url: boletoResult.boleto_url,
+                  boleto_url: resolvePaymentUrl(boletoResult.boleto_url, boletoResult.id),
                   boleto_barcode: boletoResult.boleto_barcode,
                   boleto_digitable_line: boletoResult.boleto_digitable_line,
                   boleto_nosso_numero: boletoResult.boleto_nosso_numero,
@@ -274,7 +275,7 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
                 Copiar linha digitável
               </button>
               <a
-                href={boletoResult.boleto_url || '#'}
+                href={resolvePaymentUrl(boletoResult.boleto_url, boletoResult.id) || '#'}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer"
@@ -301,7 +302,10 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
                 external_charge_id: boletoResult.external_charge_id,
                 sale_id: boletoResult.sale_id,
                 final_amount: boletoResult.final_amount,
-                payment_url: boletoResult.boleto_url || boletoResult.payment_url,
+                payment_url: resolvePaymentUrl(
+                  boletoResult.boleto_url || boletoResult.payment_url,
+                  boletoResult.id,
+                ),
                 expires_at: boletoResult.expires_at,
                 client_name: sale.expand?.customer?.name || '',
                 payment_method: 'boleto',

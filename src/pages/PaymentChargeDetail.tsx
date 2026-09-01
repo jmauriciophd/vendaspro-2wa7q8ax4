@@ -32,6 +32,7 @@ import {
   paymentMethodLabels,
   paymentMethodBadge,
   isBoletoExpired,
+  resolvePaymentUrl,
 } from '@/services/paymentService'
 import type { PaymentChargeDetail } from '@/types/payments'
 import { useAuth } from '@/context/AuthContext'
@@ -99,10 +100,12 @@ export default function PaymentChargeDetail() {
     !boletoExpired
   const [regenerateOpen, setRegenerateOpen] = useState(false)
 
+  const realPaymentUrl = resolvePaymentUrl(charge?.payment_url, charge?.id)
+
   const handleCopyLink = async () => {
-    if (!charge?.payment_url) return
+    if (!realPaymentUrl) return
     try {
-      await navigator.clipboard.writeText(charge.payment_url)
+      await navigator.clipboard.writeText(realPaymentUrl)
       setCopied(true)
       toast.success('Link copiado!')
       setTimeout(() => setCopied(false), 2000)
@@ -194,7 +197,7 @@ export default function PaymentChargeDetail() {
           >
             <Send className="w-3.5 h-3.5" /> Reenviar
           </button>
-          {charge.payment_url && (
+          {realPaymentUrl && (
             <button
               onClick={handleCopyLink}
               className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -411,7 +414,7 @@ export default function PaymentChargeDetail() {
                 {charge.boleto_barcode || charge.boleto_digitable_line ? (
                   <BoletoView
                     boleto={{
-                      boleto_url: charge.boleto_url,
+                      boleto_url: resolvePaymentUrl(charge.boleto_url, charge.id),
                       boleto_barcode: charge.boleto_barcode,
                       boleto_digitable_line: charge.boleto_digitable_line,
                       boleto_nosso_numero: charge.boleto_nosso_numero,
@@ -442,7 +445,7 @@ export default function PaymentChargeDetail() {
             )}
 
             {/* Link */}
-            {charge.payment_method === 'link' && charge.payment_url && (
+            {charge.payment_method === 'link' && realPaymentUrl && (
               <div className="mt-6 pt-6 border-t border-slate-100">
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                   Link de pagamento
@@ -450,7 +453,7 @@ export default function PaymentChargeDetail() {
                 <div className="flex items-stretch gap-2">
                   <input
                     readOnly
-                    value={charge.payment_url}
+                    value={realPaymentUrl}
                     className="flex-1 px-3.5 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl text-slate-600 outline-none truncate"
                   />
                   <button
@@ -471,7 +474,7 @@ export default function PaymentChargeDetail() {
             {/* URL para outros métodos */}
             {charge.payment_method !== 'pix' &&
               charge.payment_method !== 'link' &&
-              charge.payment_url && (
+              realPaymentUrl && (
                 <div className="mt-6 pt-6 border-t border-slate-100">
                   <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                     URL de pagamento
@@ -479,7 +482,7 @@ export default function PaymentChargeDetail() {
                   <div className="flex items-stretch gap-2">
                     <input
                       readOnly
-                      value={charge.payment_url}
+                      value={realPaymentUrl}
                       className="flex-1 px-3.5 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl text-slate-600 outline-none truncate"
                     />
                     <button

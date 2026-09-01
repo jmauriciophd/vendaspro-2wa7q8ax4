@@ -12,7 +12,12 @@ import {
   Hash,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatMoney, formatDate, formatBoletoDigitableLine } from '@/services/paymentService'
+import {
+  formatMoney,
+  formatDate,
+  formatBoletoDigitableLine,
+  resolvePaymentUrl,
+} from '@/services/paymentService'
 
 export interface BoletoViewData {
   boleto_url?: string
@@ -67,7 +72,7 @@ export const BoletoView: React.FC<BoletoViewProps> = ({
 
   const handleShare = async () => {
     const line = boleto.boleto_digitable_line || ''
-    const url = boleto.boleto_url || ''
+    const url = resolvePaymentUrl(boleto.boleto_url)
     const text =
       `Boleto VendasPro — ${boleto.provider_name || ''}\n` +
       `Valor: R$ ${formatMoney(boleto.final_amount)}\n` +
@@ -233,7 +238,7 @@ export const BoletoView: React.FC<BoletoViewProps> = ({
       {!hideActions && (
         <div className="px-5 py-4 border-t-2 border-slate-200 bg-slate-50/60 flex flex-wrap items-center gap-2">
           <a
-            href={boleto.boleto_url || '#'}
+            href={resolvePaymentUrl(boleto.boleto_url) || '#'}
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 min-w-[180px] px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"

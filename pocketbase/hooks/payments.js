@@ -480,10 +480,28 @@ routerAdd(
     rec.set('installment_value', installmentValue)
     rec.set('interest_rate', interestRate)
     rec.set('status', 'pending')
-    rec.set(
-      'payment_url',
-      'https://pay.vendaspro.demo/' + provider.get('slug') + '/' + suffix.toLowerCase(),
-    )
+    // Monta URL de pagamento usando SITE_URL, Origin/Host da requisição ou fallback
+    let baseUrl = ($os.getenv('SITE_URL') || '').trim()
+    if (!baseUrl) {
+      const reqHeaders = e.requestInfo().headers || {}
+      const originHeader = (reqHeaders['origin'] || '').toString().trim()
+      const hostHeader = (reqHeaders['host'] || reqHeaders['x-forwarded-host'] || '')
+        .toString()
+        .trim()
+      const protoHeader = (reqHeaders['x-forwarded-proto'] || 'https').toString().trim()
+      if (originHeader) {
+        baseUrl = originHeader
+      } else if (hostHeader) {
+        baseUrl = (protoHeader || 'https') + '://' + hostHeader
+      }
+    }
+    while (baseUrl.length > 0 && baseUrl.charAt(baseUrl.length - 1) === '/') {
+      baseUrl = baseUrl.substring(0, baseUrl.length - 1)
+    }
+    const defaultPayUrl = baseUrl
+      ? baseUrl + '/financeiro/cobrancas/' + rec.id
+      : '/financeiro/cobrancas/' + rec.id
+    rec.set('payment_url', defaultPayUrl)
     if (method === 'pix') {
       rec.set(
         'pix_code',
@@ -771,11 +789,26 @@ routerAdd(
         const dGeral = rndDigits(1)
         const line = b1 + d1 + b2 + d2 + b3 + d3 + dGeral + valorPad
         const nosso = rndDigits(11)
+        let bBase = ($os.getenv('SITE_URL') || '').trim()
+        if (!bBase) {
+          const reqH = e.requestInfo().headers || {}
+          const origH = (reqH['origin'] || '').toString().trim()
+          const hstH = (reqH['host'] || reqH['x-forwarded-host'] || '').toString().trim()
+          const prtH = (reqH['x-forwarded-proto'] || 'https').toString().trim()
+          if (origH) bBase = origH
+          else if (hstH) bBase = (prtH || 'https') + '://' + hstH
+        }
+        while (bBase.length > 0 && bBase.charAt(bBase.length - 1) === '/') {
+          bBase = bBase.substring(0, bBase.length - 1)
+        }
+        const boletoTarget = bBase
+          ? bBase + '/financeiro/cobrancas/' + rec.id
+          : '/financeiro/cobrancas/' + rec.id
         return {
           barcode: barcode,
           line: line,
           nosso: nosso,
-          url: 'https://boleto.vendaspro.demo/' + bankCode + '/' + nosso,
+          url: boletoTarget,
           doc: externalId,
         }
       }
@@ -3192,11 +3225,26 @@ routerAdd(
       const dGeral = rndDigits(1)
       const line = b1 + d1 + b2 + d2 + b3 + d3 + dGeral + valorPad
       const nosso = rndDigits(11)
+      let bBase = ($os.getenv('SITE_URL') || '').trim()
+      if (!bBase) {
+        const reqH = e.requestInfo().headers || {}
+        const origH = (reqH['origin'] || '').toString().trim()
+        const hstH = (reqH['host'] || reqH['x-forwarded-host'] || '').toString().trim()
+        const prtH = (reqH['x-forwarded-proto'] || 'https').toString().trim()
+        if (origH) bBase = origH
+        else if (hstH) bBase = (prtH || 'https') + '://' + hstH
+      }
+      while (bBase.length > 0 && bBase.charAt(bBase.length - 1) === '/') {
+        bBase = bBase.substring(0, bBase.length - 1)
+      }
+      const boletoTarget = bBase
+        ? bBase + '/financeiro/cobrancas/' + newRec.id
+        : '/financeiro/cobrancas/' + newRec.id
       return {
         barcode: barcode,
         line: line,
         nosso: nosso,
-        url: 'https://boleto.vendaspro.demo/' + bankCode + '/' + nosso,
+        url: boletoTarget,
         doc: externalId,
       }
     }

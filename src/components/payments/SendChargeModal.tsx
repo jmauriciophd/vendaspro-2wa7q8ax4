@@ -1,7 +1,12 @@
 import React, { useState } from 'react'
 import { X, Send, Copy, Mail, MessageCircle, Link2, Check } from 'lucide-react'
 import { toast } from 'sonner'
-import { paymentService, formatMoney, formatDate } from '@/services/paymentService'
+import {
+  paymentService,
+  formatMoney,
+  formatDate,
+  resolvePaymentUrl,
+} from '@/services/paymentService'
 import type { PaymentChargeDetail, ChargeMessageChannel } from '@/types/payments'
 
 interface SendChargeModalProps {
@@ -33,7 +38,7 @@ export const SendChargeModal: React.FC<SendChargeModalProps> = ({
   const saleRef = charge.sale_id ? '#' + charge.sale_id.slice(-6).toUpperCase() : ''
   const valor = 'R$ ' + formatMoney(charge.final_amount)
   const vencimento = formatDate(charge.expires_at)
-  const link = charge.payment_url || ''
+  const link = resolvePaymentUrl(charge.payment_url, charge.id)
   const clientName = charge.client_name || 'cliente'
 
   const message = `Olá, ${clientName}. Segue o link para pagamento do pedido ${saleRef}. Valor: ${valor}. Vencimento: ${vencimento}. ${link}. Após a confirmação, o sistema atualizará automaticamente o pedido.`

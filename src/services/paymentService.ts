@@ -243,6 +243,45 @@ export const auditActionLabels: Record<string, string> = {
   reconciliation: 'Conciliação',
 }
 
+/**
+ * Normaliza e resolve a URL de checkout / pagamento para a URL real da aplicação.
+ * Se a URL gravada for demo/inválida ou relativa, substitui pelo origin atual da aplicação.
+ */
+export function resolvePaymentUrl(url?: string | null, chargeId?: string | null): string {
+  const currentOrigin =
+    typeof window !== 'undefined' && window.location?.origin ? window.location.origin : ''
+
+  if (!url || url.trim() === '') {
+    if (chargeId && currentOrigin) {
+      return `${currentOrigin}/financeiro/cobrancas/${chargeId}`
+    }
+    return ''
+  }
+
+  const trimmed = url.trim()
+
+  // Se aponta para domínio demo ou inexistente (ex: pay.vendaspro.demo, boleto.vendaspro.demo)
+  if (
+    trimmed.includes('vendaspro.demo') ||
+    trimmed.includes('pay.vendaspro') ||
+    trimmed.includes('boleto.vendaspro')
+  ) {
+    if (chargeId && currentOrigin) {
+      return `${currentOrigin}/financeiro/cobrancas/${chargeId}`
+    }
+    if (currentOrigin) {
+      return `${currentOrigin}/financeiro/cobrancas`
+    }
+  }
+
+  // Se é uma rota relativa iniciada por "/"
+  if (trimmed.startsWith('/') && currentOrigin) {
+    return `${currentOrigin}${trimmed}`
+  }
+
+  return trimmed
+}
+
 export function formatMoney(v: number | undefined | null): string {
   return Number(v || 0).toLocaleString('pt-BR', {
     minimumFractionDigits: 2,
