@@ -27,12 +27,31 @@ export const PixDisplay: React.FC<PixDisplayProps> = ({ pixCode, qrcode, classNa
     }
   }
 
+  const normalizedQrCodeSrc = (() => {
+    if (!qrcode || !qrcode.trim()) return null
+    const trimmed = qrcode.trim()
+    if (
+      trimmed.startsWith('data:image/') ||
+      trimmed.startsWith('http://') ||
+      trimmed.startsWith('https://') ||
+      trimmed.startsWith('/')
+    ) {
+      return trimmed
+    }
+    // Se for base64 puro (ex: Mercado Pago retorna base64 da imagem png)
+    return `data:image/png;base64,${trimmed}`
+  })()
+
   return (
     <div className={`space-y-3 ${className}`}>
       <div className="flex flex-col items-center gap-3 p-4 bg-white border border-slate-200 rounded-2xl">
-        <div className="w-44 h-44 bg-white border-2 border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 p-3">
-          {qrcode ? (
-            <img src={qrcode} alt="QR Code PIX" className="w-full h-full object-contain" />
+        <div className="w-44 h-44 bg-white border-2 border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 p-3 overflow-hidden">
+          {normalizedQrCodeSrc ? (
+            <img
+              src={normalizedQrCodeSrc}
+              alt="QR Code PIX"
+              className="w-full h-full object-contain"
+            />
           ) : (
             <>
               <QrCode className="w-20 h-20 text-slate-800" />

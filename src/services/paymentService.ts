@@ -274,9 +274,26 @@ export function resolvePaymentUrl(url?: string | null, chargeId?: string | null)
     }
   }
 
+  // Se for uma URL que termina com /financeiro/cobrancas/ sem o ID e temos o chargeId
+  if (
+    chargeId &&
+    (trimmed.endsWith('/financeiro/cobrancas/') || trimmed.endsWith('/financeiro/cobrancas'))
+  ) {
+    const baseClean = trimmed.replace(/\/+$/, '')
+    return `${baseClean}/${chargeId}`
+  }
+
   // Se é uma rota relativa iniciada por "/"
   if (trimmed.startsWith('/') && currentOrigin) {
-    return `${currentOrigin}${trimmed}`
+    let full = `${currentOrigin}${trimmed}`
+    if (
+      chargeId &&
+      (full.endsWith('/financeiro/cobrancas/') || full.endsWith('/financeiro/cobrancas'))
+    ) {
+      const baseClean = full.replace(/\/+$/, '')
+      return `${baseClean}/${chargeId}`
+    }
+    return full
   }
 
   return trimmed

@@ -1107,53 +1107,54 @@ routerAdd(
 )
 
 // ---------------------------------------------------------------------------
-// GET /backend/v1/payments/charges/{id}  (detalhe + timeline)
+// GET /backend/v1/payments/charges/{id}  (detalhe + timeline - público ou auth)
 // ---------------------------------------------------------------------------
-routerAdd(
-  'GET',
-  '/backend/v1/payments/charges/{id}',
-  (e) => {
-    if (!e.auth) return e.json(401, { message: 'Não autenticado.' })
-    const role = e.auth.get('role') || 'vendedor'
-    const userId = e.auth.id
-    const id = e.request.pathValue('id')
+routerAdd('GET', '/backend/v1/payments/charges/{id}', (e) => {
+  const id = e.request.pathValue('id')
 
-    let rec
-    try {
-      rec = $app.findRecordById('payment_charges', id)
-    } catch (_) {
-      return e.json(404, { message: 'Cobrança não encontrada.' })
-    }
-    if (role === 'vendedor' && rec.get('seller_id') !== userId) {
-      return e.json(403, { message: 'Acesso negado a esta cobrança.' })
-    }
+  let rec
+  try {
+    rec = $app.findRecordById('payment_charges', id)
+  } catch (_) {
+    return e.json(404, { message: 'Cobrança não encontrada.' })
+  }
 
-    // nomes
-    let customerName = ''
-    try {
-      customerName = $app.findRecordById('customers', rec.get('client_id') || '').get('name')
-    } catch (_) {}
-    let sellerName = ''
-    try {
-      const u = $app.findRecordById('users', rec.get('seller_id') || '')
-      sellerName = u.get('name') || u.get('email')
-    } catch (_) {}
-    let providerName = ''
-    let providerSlug = ''
-    try {
-      const p = $app.findRecordById('payment_providers', rec.get('provider_id') || '')
-      providerName = p.get('name')
-      providerSlug = p.get('slug')
-    } catch (_) {}
+  const isAuth = Boolean(e.auth)
+  const role = e.auth ? e.auth.get('role') || 'vendedor' : null
+  const userId = e.auth ? e.auth.id : null
 
-    // timeline (audit log)
+  // Se estiver autenticado e for vendedor, só acessa suas cobranças
+  if (isAuth && role === 'vendedor' && rec.get('seller_id') !== userId) {
+    return e.json(403, { message: 'Acesso negado a esta cobrança.' })
+  }
+
+  // nomes
+  let customerName = ''
+  try {
+    customerName = $app.findRecordById('customers', rec.get('client_id') || '').get('name')
+  } catch (_) {}
+  let sellerName = ''
+  try {
+    const u = $app.findRecordById('users', rec.get('seller_id') || '')
+    sellerName = u.get('name') || u.get('email')
+  } catch (_) {}
+  let providerName = ''
+  let providerSlug = ''
+  try {
+    const p = $app.findRecordById('payment_providers', rec.get('provider_id') || '')
+    providerName = p.get('name')
+    providerSlug = p.get('slug')
+  } catch (_) {}
+
+  // timeline (audit log) - apenas para usuários autenticados
+  const timeline = []
+  if (isAuth) {
     let audit = []
     try {
       audit = $app.findRecordsByFilter('payment_audit_log', 'charge_id = {:c}', 'created', 0, 0, {
         c: id,
       })
     } catch (_) {}
-    const timeline = []
     for (let i = 0; i < audit.length; i++) {
       const a = audit[i]
       let uname = ''
@@ -1173,49 +1174,48 @@ routerAdd(
         created: a.get('created') || '',
       })
     }
+  }
 
-    return e.json(200, {
-      id: rec.id,
-      external_charge_id: rec.get('external_charge_id') || '',
-      sale_id: rec.get('sale_id') || '',
-      client_id: rec.get('client_id') || '',
-      client_name: customerName,
-      seller_id: rec.get('seller_id') || '',
-      seller_name: sellerName,
-      provider_id: rec.get('provider_id') || '',
-      provider_name: providerName,
-      provider_slug: providerSlug,
-      financial_account_id: rec.get('financial_account_id') || '',
-      payment_method: rec.get('payment_method') || '',
-      original_amount: rec.get('original_amount') || 0,
-      discount_amount: rec.get('discount_amount') || 0,
-      final_amount: rec.get('final_amount') || 0,
-      provider_fee: rec.get('provider_fee') || 0,
-      net_value: rec.get('net_value') || 0,
-      installments: rec.get('installments') || 1,
-      installment_value: rec.get('installment_value') || 0,
-      interest_rate: rec.get('interest_rate') || 0,
-      status: rec.get('status') || 'pending',
-      payment_url: rec.get('payment_url') || '',
-      pix_code: rec.get('pix_code') || '',
-      pix_qrcode: rec.get('pix_qrcode') || '',
-      expires_at: rec.get('expires_at') || '',
-      paid_at: rec.get('paid_at') || '',
-      canceled_at: rec.get('canceled_at') || '',
-      provider_response: rec.get('provider_response') || {},
-      created_by: rec.get('created_by') || '',
-      created: rec.get('created') || '',
-      updated: rec.get('updated') || '',
-      timeline: timeline,
-      boleto_url: rec.get('boleto_url') || '',
-      boleto_barcode: rec.get('boleto_barcode') || '',
-      boleto_digitable_line: rec.get('boleto_digitable_line') || '',
-      boleto_nosso_numero: rec.get('boleto_nosso_numero') || '',
-      boleto_document_number: rec.get('boleto_document_number') || '',
-    })
-  },
-  $apis.requireAuth(),
-)
+  return e.json(200, {
+    id: rec.id,
+    external_charge_id: rec.get('external_charge_id') || '',
+    sale_id: rec.get('sale_id') || '',
+    client_id: rec.get('client_id') || '',
+    client_name: customerName,
+    seller_id: rec.get('seller_id') || '',
+    seller_name: sellerName,
+    provider_id: rec.get('provider_id') || '',
+    provider_name: providerName,
+    provider_slug: providerSlug,
+    financial_account_id: rec.get('financial_account_id') || '',
+    payment_method: rec.get('payment_method') || '',
+    original_amount: rec.get('original_amount') || 0,
+    discount_amount: rec.get('discount_amount') || 0,
+    final_amount: rec.get('final_amount') || 0,
+    provider_fee: isAuth ? rec.get('provider_fee') || 0 : 0,
+    net_value: isAuth ? rec.get('net_value') || 0 : rec.get('final_amount') || 0,
+    installments: rec.get('installments') || 1,
+    installment_value: rec.get('installment_value') || 0,
+    interest_rate: rec.get('interest_rate') || 0,
+    status: rec.get('status') || 'pending',
+    payment_url: rec.get('payment_url') || '',
+    pix_code: rec.get('pix_code') || '',
+    pix_qrcode: rec.get('pix_qrcode') || '',
+    expires_at: rec.get('expires_at') || '',
+    paid_at: rec.get('paid_at') || '',
+    canceled_at: rec.get('canceled_at') || '',
+    provider_response: isAuth ? rec.get('provider_response') || {} : {},
+    created_by: isAuth ? rec.get('created_by') || '' : '',
+    created: rec.get('created') || '',
+    updated: rec.get('updated') || '',
+    timeline: timeline,
+    boleto_url: rec.get('boleto_url') || '',
+    boleto_barcode: rec.get('boleto_barcode') || '',
+    boleto_digitable_line: rec.get('boleto_digitable_line') || '',
+    boleto_nosso_numero: rec.get('boleto_nosso_numero') || '',
+    boleto_document_number: rec.get('boleto_document_number') || '',
+  })
+})
 
 // ---------------------------------------------------------------------------
 // PUT /backend/v1/payments/charges/{id}/cancel

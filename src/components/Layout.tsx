@@ -152,12 +152,18 @@ export default function Layout() {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
+  // Rotas públicas que podem ser acessadas através ou fora do layout
+  const isPublicRoute =
+    location.pathname.startsWith('/v/') ||
+    location.pathname.startsWith('/catalogo/') ||
+    location.pathname.startsWith('/financeiro/cobrancas/')
+
   // Auth protection check
   useEffect(() => {
-    if (!isLoading && !user && location.pathname !== '/login') {
+    if (!isLoading && !user && location.pathname !== '/login' && !isPublicRoute) {
       navigate('/login', { state: { from: location }, replace: true })
     }
-  }, [user, isLoading, location, navigate])
+  }, [user, isLoading, location, navigate, isPublicRoute])
 
   // Redireciona vendedor do dashboard geral para seu dashboard exclusivo
   useEffect(() => {
@@ -175,6 +181,38 @@ export default function Layout() {
         </div>
         <h2 className="text-xl font-bold text-slate-800">CRM de Vendas</h2>
         <p className="text-sm text-slate-500 mt-1">Carregando painel de vendas...</p>
+      </div>
+    )
+  }
+
+  // Se o usuário não estiver autenticado e estiver em rota pública dentro do layout (ex: cobrança direta)
+  if (!user && isPublicRoute) {
+    return (
+      <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
+        {/* Header público limpo */}
+        <header className="sticky top-0 z-20 h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+              <ShoppingCart className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-slate-900 leading-tight">VendasPro</h1>
+              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                Ambiente de Pagamento
+              </span>
+            </div>
+          </div>
+          <NavLink
+            to="/login"
+            className="px-3.5 py-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors"
+          >
+            Acessar Sistema
+          </NavLink>
+        </header>
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-4xl w-full mx-auto">
+          <Outlet />
+        </main>
       </div>
     )
   }

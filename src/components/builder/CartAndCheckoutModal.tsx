@@ -518,9 +518,16 @@ export const CartAndCheckoutModal: React.FC<CartAndCheckoutModalProps> = ({
                 {orderResult.payment_charge.pix_qrcode && (
                   <div className="flex justify-center my-2">
                     <img
-                      src={`data:image/png;base64,${orderResult.payment_charge.pix_qrcode}`}
+                      src={
+                        orderResult.payment_charge.pix_qrcode.startsWith('data:image/') ||
+                        orderResult.payment_charge.pix_qrcode.startsWith('http://') ||
+                        orderResult.payment_charge.pix_qrcode.startsWith('https://') ||
+                        orderResult.payment_charge.pix_qrcode.startsWith('/')
+                          ? orderResult.payment_charge.pix_qrcode
+                          : `data:image/png;base64,${orderResult.payment_charge.pix_qrcode}`
+                      }
                       alt="QR Code PIX"
-                      className="w-44 h-44 border border-slate-200 rounded-xl bg-white p-2 shadow-xs"
+                      className="w-44 h-44 border border-slate-200 rounded-xl bg-white p-2 shadow-xs object-contain"
                     />
                   </div>
                 )}

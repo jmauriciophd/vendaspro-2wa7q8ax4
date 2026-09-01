@@ -45,6 +45,7 @@ export default function PaymentChargeDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { isManager, isAdmin, user } = useAuth()
+  const isAuthenticated = Boolean(user)
   const [charge, setCharge] = useState<PaymentChargeDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'details' | 'timeline'>('details')
@@ -64,8 +65,10 @@ export default function PaymentChargeDetail() {
       setCharge(data)
     } catch (err) {
       console.error(err)
-      toast.error('Cobrança não encontrada.')
-      navigate('/financeiro/cobrancas')
+      toast.error('Cobrança não encontrada ou acesso indisponível.')
+      if (isAuthenticated) {
+        navigate('/financeiro/cobrancas')
+      }
     } finally {
       setLoading(false)
     }
@@ -183,78 +186,93 @@ export default function PaymentChargeDetail() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <button
-          onClick={() => navigate('/financeiro/cobrancas')}
-          className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" /> Voltar para cobranças
-        </button>
-        <div className="flex items-center gap-2 flex-wrap">
+      {isAuthenticated ? (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <button
-            onClick={() => setSendOpen(true)}
-            className="px-3.5 py-2 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            onClick={() => navigate('/financeiro/cobrancas')}
+            className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors"
           >
-            <Send className="w-3.5 h-3.5" /> Reenviar
+            <ArrowLeft className="w-4 h-4" /> Voltar para cobranças
           </button>
-          {realPaymentUrl && (
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={handleCopyLink}
-              className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              onClick={() => setSendOpen(true)}
+              className="px-3.5 py-2 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              Copiar link
+              <Send className="w-3.5 h-3.5" /> Reenviar
             </button>
-          )}
-          {canCancel && (
+            {realPaymentUrl && (
+              <button
+                onClick={handleCopyLink}
+                className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                Copiar link
+              </button>
+            )}
+            {canCancel && (
+              <button
+                onClick={handleCancel}
+                disabled={actionLoading}
+                className="px-3.5 py-2 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
+              >
+                <Ban className="w-3.5 h-3.5" /> Cancelar
+              </button>
+            )}
             <button
-              onClick={handleCancel}
+              onClick={handleCheckStatus}
               disabled={actionLoading}
-              className="px-3.5 py-2 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
+              className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
             >
-              <Ban className="w-3.5 h-3.5" /> Cancelar
+              <RefreshCw className="w-3.5 h-3.5" /> Verificar status
             </button>
-          )}
-          <button
-            onClick={handleCheckStatus}
-            disabled={actionLoading}
-            className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
-          >
-            <RefreshCw className="w-3.5 h-3.5" /> Verificar status
-          </button>
-          <button
-            onClick={handleVerifyProvider}
-            disabled={actionLoading}
-            className="px-3.5 py-2 text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
-          >
-            <BadgeCheck className="w-3.5 h-3.5" /> Verificar status no provedor
-          </button>
-          {canManualConfirm && (
             <button
-              onClick={() => setManualOpen(true)}
-              className="px-3.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              onClick={handleVerifyProvider}
+              disabled={actionLoading}
+              className="px-3.5 py-2 text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
             >
-              <CheckCircle2 className="w-3.5 h-3.5" /> Confirmar manualmente
+              <BadgeCheck className="w-3.5 h-3.5" /> Verificar status no provedor
             </button>
-          )}
-          {canRefund && (
-            <button
-              onClick={() => setRefundOpen(true)}
-              className="px-3.5 py-2 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <Undo2 className="w-3.5 h-3.5" /> Reembolsar
-            </button>
-          )}
-          {canRegenerateBoleto && (
-            <button
-              onClick={() => setRegenerateOpen(true)}
-              className="px-3.5 py-2 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <FileText className="w-3.5 h-3.5" /> Gerar novo boleto
-            </button>
-          )}
+            {canManualConfirm && (
+              <button
+                onClick={() => setManualOpen(true)}
+                className="px-3.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" /> Confirmar manualmente
+              </button>
+            )}
+            {canRefund && (
+              <button
+                onClick={() => setRefundOpen(true)}
+                className="px-3.5 py-2 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Undo2 className="w-3.5 h-3.5" /> Reembolsar
+              </button>
+            )}
+            {canRegenerateBoleto && (
+              <button
+                onClick={() => setRegenerateOpen(true)}
+                className="px-3.5 py-2 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5" /> Gerar novo boleto
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">Visualização de Pagamento</span>
+          </div>
+          <button
+            onClick={load}
+            disabled={actionLoading}
+            className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Atualizar status
+          </button>
+        </div>
+      )}
 
       {/* Card superior com status grande */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
@@ -282,31 +300,33 @@ export default function PaymentChargeDetail() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border border-slate-200 rounded-xl overflow-hidden text-xs font-semibold w-fit">
-        <button
-          onClick={() => setTab('details')}
-          className={`px-5 py-2 transition-colors ${
-            tab === 'details'
-              ? 'bg-indigo-600 text-white'
-              : 'bg-white text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          Detalhes
-        </button>
-        <button
-          onClick={() => setTab('timeline')}
-          className={`px-5 py-2 transition-colors border-l border-slate-200 ${
-            tab === 'timeline'
-              ? 'bg-indigo-600 text-white'
-              : 'bg-white text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          Linha do Tempo
-        </button>
-      </div>
+      {/* Tabs - apenas para usuários autenticados */}
+      {isAuthenticated && (
+        <div className="flex border border-slate-200 rounded-xl overflow-hidden text-xs font-semibold w-fit">
+          <button
+            onClick={() => setTab('details')}
+            className={`px-5 py-2 transition-colors ${
+              tab === 'details'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            Detalhes
+          </button>
+          <button
+            onClick={() => setTab('timeline')}
+            className={`px-5 py-2 transition-colors border-l border-slate-200 ${
+              tab === 'timeline'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            Linha do Tempo
+          </button>
+        </div>
+      )}
 
-      {tab === 'details' ? (
+      {tab === 'details' || !isAuthenticated ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Dados principais */}
           <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
@@ -381,12 +401,12 @@ export default function PaymentChargeDetail() {
             )}
 
             {/* PIX */}
-            {charge.payment_method === 'pix' && charge.pix_code && (
+            {charge.payment_method === 'pix' && (charge.pix_code || charge.pix_qrcode) && (
               <div className="mt-6 pt-6 border-t border-slate-100">
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
                   Pagamento PIX
                 </h4>
-                <PixDisplay pixCode={charge.pix_code} qrcode={charge.pix_qrcode} />
+                <PixDisplay pixCode={charge.pix_code || ''} qrcode={charge.pix_qrcode} />
               </div>
             )}
 
@@ -433,7 +453,7 @@ export default function PaymentChargeDetail() {
                   </div>
                 )}
 
-                {canRegenerateBoleto && (
+                {canRegenerateBoleto && isAuthenticated && (
                   <button
                     onClick={() => setRegenerateOpen(true)}
                     className="w-full px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
@@ -444,37 +464,68 @@ export default function PaymentChargeDetail() {
               </div>
             )}
 
-            {/* Link */}
-            {charge.payment_method === 'link' && realPaymentUrl && (
-              <div className="mt-6 pt-6 border-t border-slate-100">
-                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Link de pagamento
-                </h4>
-                <div className="flex items-stretch gap-2">
-                  <input
-                    readOnly
-                    value={realPaymentUrl}
-                    className="flex-1 px-3.5 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl text-slate-600 outline-none truncate"
-                  />
-                  <button
-                    onClick={handleCopyLink}
-                    className={`shrink-0 px-3.5 py-2 text-xs font-semibold rounded-xl border transition-colors flex items-center gap-1.5 cursor-pointer ${
-                      copied
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                    }`}
-                  >
-                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copied ? 'Copiado' : 'Copiar'}
-                  </button>
-                </div>
-              </div>
-            )}
+            {/* Link de pagamento / Cartão Mercado Pago */}
+            {charge.payment_method === 'link' ||
+            charge.payment_method === 'credit_card' ||
+            (charge.payment_url && charge.payment_url.includes('mercadopago'))
+              ? realPaymentUrl && (
+                  <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        {charge.payment_method === 'credit_card'
+                          ? 'Pagamento com Cartão de Crédito'
+                          : 'Link de pagamento'}
+                      </h4>
+                    </div>
+                    <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                      <div className="text-xs text-indigo-950 text-center sm:text-left">
+                        <p className="font-semibold">
+                          Pague com segurança através do checkout protegido
+                        </p>
+                        <p className="text-slate-500 text-[11px] mt-0.5">
+                          Clique abaixo para abrir o portal de pagamento.
+                        </p>
+                      </div>
+                      <a
+                        href={realPaymentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 transition-transform active:scale-95"
+                      >
+                        <CreditCard className="w-4 h-4" /> Pagar no Mercado Pago / Checkout
+                      </a>
+                    </div>
+                    <div className="flex items-stretch gap-2">
+                      <input
+                        readOnly
+                        value={realPaymentUrl}
+                        className="flex-1 px-3.5 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl text-slate-600 outline-none truncate"
+                      />
+                      <button
+                        onClick={handleCopyLink}
+                        className={`shrink-0 px-3.5 py-2 text-xs font-semibold rounded-xl border transition-colors flex items-center gap-1.5 cursor-pointer ${
+                          copied
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                        }`}
+                      >
+                        {copied ? (
+                          <Check className="w-3.5 h-3.5" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                        {copied ? 'Copiado' : 'Copiar'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              : null}
 
-            {/* URL para outros métodos */}
-            {charge.payment_method !== 'pix' &&
+            {/* URL pública desta cobrança para compartilhamento */}
+            {realPaymentUrl &&
               charge.payment_method !== 'link' &&
-              realPaymentUrl && (
+              charge.payment_method !== 'credit_card' &&
+              !charge.payment_url?.includes('mercadopago') && (
                 <div className="mt-6 pt-6 border-t border-slate-100">
                   <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                     URL de pagamento
@@ -534,20 +585,24 @@ export default function PaymentChargeDetail() {
                     </span>
                   </div>
                 )}
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Taxa do provedor</span>
-                  <span className="font-semibold text-rose-600">
-                    - R$ {formatMoney(charge.provider_fee)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Valor líquido</span>
-                  <span className="font-semibold text-indigo-700">
-                    R$ {formatMoney(charge.net_value)}
-                  </span>
-                </div>
+                {isAuthenticated && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Taxa do provedor</span>
+                      <span className="font-semibold text-rose-600">
+                        - R$ {formatMoney(charge.provider_fee)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Valor líquido</span>
+                      <span className="font-semibold text-indigo-700">
+                        R$ {formatMoney(charge.net_value)}
+                      </span>
+                    </div>
+                  </>
+                )}
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <span className="font-semibold text-slate-700">Final</span>
+                  <span className="font-semibold text-slate-700">Total</span>
                   <span className="font-bold text-emerald-700 text-base">
                     R$ {formatMoney(charge.final_amount)}
                   </span>
