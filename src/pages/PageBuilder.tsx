@@ -17,6 +17,14 @@ import {
   Sparkles,
   Loader2,
   ExternalLink,
+  ChevronRight,
+  ChevronDown,
+  Trash2,
+  Copy,
+  ArrowUp,
+  ArrowDown,
+  Lock,
+  Settings,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,7 +37,14 @@ import { VersionHistoryModal } from '@/components/builder/VersionHistoryModal'
 import { salePageService, templateService } from '@/services/builder'
 import { productService, customerService } from '@/services/crm'
 import { useAuth } from '@/context/AuthContext'
-import type { SalePage, BuilderElement, PageLayoutData, Breakpoint } from '@/types/builder'
+import type {
+  SalePage,
+  BuilderElement,
+  PageLayoutData,
+  Breakpoint,
+  PageSettings,
+  PageBuilderElementType,
+} from '@/types/builder'
 import type { Product, Customer } from '@/types/crm'
 import { toast } from 'sonner'
 
@@ -38,7 +53,7 @@ export const PageBuilder: React.FC = () => {
   const { pageId, templateId } = useParams<{ pageId?: string; templateId?: string }>()
   const { user, can } = useAuth()
 
-  // Estados principais
+  // Estados principais da página e layout
   const [page, setPage] = useState<SalePage | null>(null)
   const [pageTitle, setPageTitle] = useState('Novo Catálogo Comercial')
   const [layout, setLayout] = useState<PageLayoutData>({
@@ -46,6 +61,14 @@ export const PageBuilder: React.FC = () => {
       id: 'root',
       type: 'page',
       styles: { backgroundColor: '#f8fafc' },
+      pageSettings: {
+        pagePaddingDesktop: '24px',
+        pagePaddingTablet: '20px',
+        pagePaddingMobile: '16px',
+        pageMaxWidth: '1200px',
+        contentAlign: 'center',
+        backgroundColor: '#f8fafc',
+      },
       children: [],
     },
     elements: {},
@@ -57,6 +80,9 @@ export const PageBuilder: React.FC = () => {
   const [isPreview, setIsPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+
+  // Camadas: controle de nós expandidos
+  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({ root: true })
 
   // Histórico Undo/Redo na memória do editor
   const [history, setHistory] = useState<PageLayoutData[]>([])
@@ -71,9 +97,10 @@ export const PageBuilder: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
-  const isFirstLoad = useRef(true)
+  // Ref para auto-scroll do canvas
+  const canvasScrollContainerRef = useRef<HTMLDivElement>(null)
 
-  // Carrega produtos reais e clientes do backend
+  // Carrega produtos reais e clientes do CRM
   useEffect(() => {
     const fetchAuxData = async () => {
       try {
@@ -91,7 +118,7 @@ export const PageBuilder: React.FC = () => {
     fetchAuxData()
   }, [])
 
-  // Carrega página ou template inicial
+  // Carrega página ou template inicial com migração de templates antigos se necessário
   useEffect(() => {
     const loadInitial = async () => {
       try {
@@ -113,7 +140,6 @@ export const PageBuilder: React.FC = () => {
             setHistoryIndex(0)
           }
         } else {
-          // Template padrão catálogo tradicional caso nenhum seja informado
           const tpls = await templateService.getAll({ activeOnly: true })
           if (tpls.length > 0 && tpls[0].layout_data?.root) {
             setLayout(tpls[0].layout_data)
@@ -129,7 +155,7 @@ export const PageBuilder: React.FC = () => {
     loadInitial()
   }, [pageId, templateId])
 
-  // Função para aplicar alteração no layout com registro de histórico
+  // Aplica alteração no layout com histórico
   const applyLayoutChange = (newLayout: PageLayoutData, skipHistory = false) => {
     setLayout(newLayout)
     setSaveStatus('unsaved')
@@ -161,13 +187,25 @@ export const PageBuilder: React.FC = () => {
     }
   }
 
-  // Adicionar novo elemento ao canvas
-  const handleAddElement = (meta: (typeof ELEMENT_DEFINITIONS)[0]) => {
+  // Encontra o elemento Pai de um ID na árvore
+  const findParentElement = (childId: string): BuilderElement | null => {
+    for (const key of Object.keys(layout.elements)) {
+      const el = layout.elements[key]
+      if (el.children && el.children.includes(childId)) {
+        return el
+      }
+    }
+    return null
+  }
+
+  // Adiciona novo elemento ao canvas ou dentro do container selecionado
+  const handleAddElement = (meta: (typeof ELEMENT_DEFINITIONS)[0], targetParentId?: string) => {
     const newId = `el-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
     const newElement: BuilderElement = {
       id: newId,
       type: meta.type,
       name: meta.label,
+      canHaveChildren: meta.canHaveChildren ?? false,
       styles: { ...meta.defaultStyles },
       content: { ...meta.defaultContent },
       children: [],
@@ -179,21 +217,29 @@ export const PageBuilder: React.FC = () => {
     }
 
     let updatedRootChildren = [...layout.root.children]
+    const effectiveParentId = targetParentId || selectedId
 
-    // Se o elemento selecionado for um container/seção, insere nele; senão no root
-    if (selectedId && layout.elements[selectedId]) {
-      const parent = layout.elements[selectedId]
-      if (
+    if (effectiveParentId && layout.elements[effectiveParentId]) {
+      const parent = layout.elements[effectiveParentId]
+      const canAccept =
         parent.type === 'section' ||
         parent.type === 'container' ||
+        parent.type === 'card' ||
         parent.type === 'columns' ||
         parent.type === 'grid' ||
-        parent.type === 'flexbox'
-      ) {
+        parent.type === 'flexbox' ||
+        parent.type === 'hero' ||
+        parent.type === 'header' ||
+        parent.type === 'footer' ||
+        parent.type === 'product_single' ||
+        parent.type === 'product_card'
+
+      if (canAccept) {
         updatedElements[parent.id] = {
           ...parent,
           children: [...(parent.children || []), newId],
         }
+        setExpandedNodes((prev) => ({ ...prev, [parent.id]: true }))
       } else {
         updatedRootChildren.push(newId)
       }
@@ -211,7 +257,21 @@ export const PageBuilder: React.FC = () => {
 
     applyLayoutChange(nextLayout)
     setSelectedId(newId)
-    toast.success(`Elemento "${meta.label}" adicionado ao layout!`)
+    toast.success(`Elemento "${meta.label}" adicionado!`)
+  }
+
+  // Adiciona um filho específico a um elemento pai
+  const handleAddChildToElement = (parentId: string, childType: string) => {
+    const meta =
+      ELEMENT_DEFINITIONS.find((e) => e.type === childType) ||
+      ({
+        type: childType as PageBuilderElementType,
+        label: childType,
+        defaultStyles: {},
+        defaultContent: {},
+      } as any)
+
+    handleAddElement(meta, parentId)
   }
 
   // Atualizar elemento selecionado
@@ -226,14 +286,29 @@ export const PageBuilder: React.FC = () => {
     applyLayoutChange(nextLayout)
   }
 
-  // Excluir elemento
+  // Atualizar configurações da página
+  const handleUpdatePageSettings = (settings: PageSettings) => {
+    const nextLayout: PageLayoutData = {
+      ...layout,
+      root: {
+        ...layout.root,
+        pageSettings: settings,
+        styles: {
+          ...layout.root.styles,
+          backgroundColor: settings.backgroundColor,
+        },
+      },
+    }
+    applyLayoutChange(nextLayout)
+  }
+
+  // Excluir elemento (com remoção em cascata segura)
   const handleDeleteElement = (id: string) => {
     const cleanChildren = (children: string[]): string[] => children.filter((cId) => cId !== id)
 
     const updatedElements = { ...layout.elements }
     delete updatedElements[id]
 
-    // Remove referências nos filhos dos outros elementos
     Object.keys(updatedElements).forEach((key) => {
       if (updatedElements[key].children) {
         updatedElements[key].children = cleanChildren(updatedElements[key].children || [])
@@ -253,7 +328,7 @@ export const PageBuilder: React.FC = () => {
     toast.success('Elemento removido.')
   }
 
-  // Duplicar elemento
+  // Duplicar elemento com recursão
   const handleDuplicateElement = (id: string) => {
     const original = layout.elements[id]
     if (!original) return
@@ -270,7 +345,25 @@ export const PageBuilder: React.FC = () => {
       [newId]: duplicated,
     }
 
-    const updatedRootChildren = [...layout.root.children, newId]
+    const parent = findParentElement(id)
+    let updatedRootChildren = [...layout.root.children]
+
+    if (parent) {
+      const pChildren = [...(parent.children || [])]
+      const idx = pChildren.indexOf(id)
+      pChildren.splice(idx + 1, 0, newId)
+      updatedElements[parent.id] = {
+        ...parent,
+        children: pChildren,
+      }
+    } else {
+      const idx = updatedRootChildren.indexOf(id)
+      if (idx >= 0) {
+        updatedRootChildren.splice(idx + 1, 0, newId)
+      } else {
+        updatedRootChildren.push(newId)
+      }
+    }
 
     applyLayoutChange({
       root: {
@@ -280,7 +373,61 @@ export const PageBuilder: React.FC = () => {
       elements: updatedElements,
     })
     setSelectedId(newId)
-    toast.success('Elemento duplicado!')
+    toast.success('Elemento duplicado com sucesso!')
+  }
+
+  // Mover elemento para cima na lista do pai
+  const handleMoveUp = (id: string) => {
+    const parent = findParentElement(id)
+    if (parent) {
+      const children = [...(parent.children || [])]
+      const idx = children.indexOf(id)
+      if (idx > 0) {
+        const temp = children[idx]
+        children[idx] = children[idx - 1]
+        children[idx - 1] = temp
+        handleUpdateElement({ ...parent, children })
+      }
+    } else {
+      const rootChildren = [...layout.root.children]
+      const idx = rootChildren.indexOf(id)
+      if (idx > 0) {
+        const temp = rootChildren[idx]
+        rootChildren[idx] = rootChildren[idx - 1]
+        rootChildren[idx - 1] = temp
+        applyLayoutChange({
+          ...layout,
+          root: { ...layout.root, children: rootChildren },
+        })
+      }
+    }
+  }
+
+  // Mover elemento para baixo na lista do pai
+  const handleMoveDown = (id: string) => {
+    const parent = findParentElement(id)
+    if (parent) {
+      const children = [...(parent.children || [])]
+      const idx = children.indexOf(id)
+      if (idx >= 0 && idx < children.length - 1) {
+        const temp = children[idx]
+        children[idx] = children[idx + 1]
+        children[idx + 1] = temp
+        handleUpdateElement({ ...parent, children })
+      }
+    } else {
+      const rootChildren = [...layout.root.children]
+      const idx = rootChildren.indexOf(id)
+      if (idx >= 0 && idx < rootChildren.length - 1) {
+        const temp = rootChildren[idx]
+        rootChildren[idx] = rootChildren[idx + 1]
+        rootChildren[idx + 1] = temp
+        applyLayoutChange({
+          ...layout,
+          root: { ...layout.root, children: rootChildren },
+        })
+      }
+    }
   }
 
   // Salvar rascunho / Publicar
@@ -333,8 +480,9 @@ export const PageBuilder: React.FC = () => {
     }
   }
 
-  // Elemento selecionado no momento
-  const selectedElement = selectedId ? layout.elements[selectedId] : null
+  // Elemento selecionado no momento e seu elemento pai
+  const selectedElement = selectedId ? layout.elements[selectedId] || null : null
+  const parentOfSelected = selectedId ? findParentElement(selectedId) : null
 
   // Largura do canvas de acordo com o breakpoint selecionado
   const canvasWidthClass = {
@@ -343,11 +491,109 @@ export const PageBuilder: React.FC = () => {
     mobile: 'w-[375px]',
   }[breakpoint]
 
+  // Renderização recursiva da árvore de camadas
+  const renderLayerNode = (elementId: string, depth = 0) => {
+    const el = layout.elements[elementId]
+    if (!el) return null
+
+    const hasChildren = el.children && el.children.length > 0
+    const isExpanded = expandedNodes[el.id] ?? true
+    const isCurSelected = selectedId === el.id
+
+    return (
+      <div key={el.id} className="space-y-0.5">
+        <div
+          onClick={() => setSelectedId(el.id)}
+          style={{ paddingLeft: `${depth * 12 + 6}px` }}
+          className={`py-1.5 pr-2 rounded-lg text-xs cursor-pointer flex items-center justify-between transition-colors group ${
+            isCurSelected
+              ? 'border border-indigo-600 bg-indigo-50 text-indigo-950 font-bold'
+              : 'hover:bg-slate-100 text-slate-700 border border-transparent'
+          }`}
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            {hasChildren ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setExpandedNodes((prev) => ({ ...prev, [el.id]: !isExpanded }))
+                }}
+                className="p-0.5 text-slate-400 hover:text-slate-700"
+              >
+                {isExpanded ? (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronRight className="w-3.5 h-3.5" />
+                )}
+              </button>
+            ) : (
+              <span className="w-3.5 inline-block" />
+            )}
+            <span className="truncate">{el.name || el.type}</span>
+          </div>
+
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleMoveUp(el.id)
+              }}
+              className="p-1 hover:text-indigo-600 text-slate-400"
+              title="Mover para cima"
+            >
+              <ArrowUp className="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleMoveDown(el.id)
+              }}
+              className="p-1 hover:text-indigo-600 text-slate-400"
+              title="Mover para baixo"
+            >
+              <ArrowDown className="w-3 h-3" />
+            </button>
+            {!el.locked && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDeleteElement(el.id)
+                }}
+                className="p-1 hover:text-rose-600 text-slate-400"
+                title="Excluir"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Filhos recursivos */}
+        {hasChildren && isExpanded && (
+          <div className="space-y-0.5 border-l border-slate-200 ml-3">
+            {el.children!.map((cId) => renderLayerNode(cId, depth + 1))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Padding responsivo do canvas baseado em PageSettings
+  const pagePadding =
+    breakpoint === 'desktop'
+      ? layout.root?.pageSettings?.pagePaddingDesktop || '24px'
+      : breakpoint === 'tablet'
+        ? layout.root?.pageSettings?.pagePaddingTablet || '20px'
+        : layout.root?.pageSettings?.pagePaddingMobile || '16px'
+
   return (
     <div className="h-screen flex flex-col bg-slate-100 overflow-hidden select-none">
       {/* ---------------- BARRA SUPERIOR (Top Bar) ---------------- */}
       <header className="h-14 border-b border-slate-200 bg-white px-4 flex items-center justify-between z-30 shrink-0">
-        {/* Lado Esquerdo: Voltar & Título */}
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -389,14 +635,14 @@ export const PageBuilder: React.FC = () => {
           </div>
         </div>
 
-        {/* Centro: Alternador de Breakpoint (Desktop / Tablet / Mobile) & Undo/Redo */}
+        {/* Alternador de Breakpoint & Undo/Redo */}
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
           <Button
             variant={breakpoint === 'desktop' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setBreakpoint('desktop')}
             className={`h-7 px-2.5 text-xs ${breakpoint === 'desktop' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'}`}
-            title="Visualização Desktop"
+            title="Desktop"
           >
             <Monitor className="w-3.5 h-3.5" />
           </Button>
@@ -405,7 +651,7 @@ export const PageBuilder: React.FC = () => {
             size="sm"
             onClick={() => setBreakpoint('tablet')}
             className={`h-7 px-2.5 text-xs ${breakpoint === 'tablet' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'}`}
-            title="Visualização Tablet"
+            title="Tablet"
           >
             <Tablet className="w-3.5 h-3.5" />
           </Button>
@@ -414,7 +660,7 @@ export const PageBuilder: React.FC = () => {
             size="sm"
             onClick={() => setBreakpoint('mobile')}
             className={`h-7 px-2.5 text-xs ${breakpoint === 'mobile' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'}`}
-            title="Visualização Mobile"
+            title="Smartphone"
           >
             <Smartphone className="w-3.5 h-3.5" />
           </Button>
@@ -451,7 +697,7 @@ export const PageBuilder: React.FC = () => {
               size="sm"
               onClick={() => setIsVersionModalOpen(true)}
               className="h-8 text-xs text-slate-600 hover:text-slate-900 flex items-center gap-1"
-              title="Histórico de versões salvas"
+              title="Histórico de versões"
             >
               <History className="w-3.5 h-3.5" />
               <span className="hidden md:inline">Versões</span>
@@ -474,7 +720,7 @@ export const PageBuilder: React.FC = () => {
               target="_blank"
               rel="noreferrer"
               className="h-8 px-2.5 rounded-md border border-slate-200 text-xs font-semibold text-slate-600 hover:text-indigo-600 hover:border-indigo-200 flex items-center gap-1"
-              title="Abrir página pública em nova aba"
+              title="Abrir página pública"
             >
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
@@ -492,7 +738,7 @@ export const PageBuilder: React.FC = () => {
             ) : (
               <Save className="w-3.5 h-3.5" />
             )}
-            <span className="hidden sm:inline">Salvar Rascunho</span>
+            <span className="hidden sm:inline">Salvar</span>
           </Button>
 
           <Button
@@ -507,9 +753,9 @@ export const PageBuilder: React.FC = () => {
         </div>
       </header>
 
-      {/* ---------------- CORPO PRINCIPAL (3 Colunas) ---------------- */}
+      {/* ---------------- CORPO PRINCIPAL (3 Colunas com Scroll Total) ---------------- */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* 1. PAINEL ESQUERDO: ELEMENTOS & CAMADAS */}
+        {/* 1. PAINEL ESQUERDO: BIBLIOTECA & CAMADAS DA ÁRVORE */}
         {!isPreview && (
           <aside className="w-72 border-r border-slate-200 bg-white flex flex-col shrink-0 z-10">
             <Tabs defaultValue="elements" className="flex-1 flex flex-col min-h-0">
@@ -524,12 +770,12 @@ export const PageBuilder: React.FC = () => {
 
               {/* ABA ELEMENTOS ARRASTÁVEIS / CLICÁVEIS */}
               <TabsContent value="elements" className="flex-1 overflow-y-auto p-3 space-y-4 m-0">
-                {['commerce', 'marketing', 'layout', 'basic', 'advanced'].map((cat) => {
+                {['layout', 'commerce', 'marketing', 'basic', 'advanced'].map((cat) => {
                   const catElements = ELEMENT_DEFINITIONS.filter((e) => e.category === cat)
                   const catLabel = {
+                    layout: '📐 Layout & Estrutura',
                     commerce: '🛒 E-commerce & Produtos',
                     marketing: '🎯 Conversão & Banners',
-                    layout: '📐 Layout & Estrutura',
                     basic: '✏️ Textos & Mídia',
                     advanced: '⚡ Avançado & Shortcodes',
                   }[cat]
@@ -567,51 +813,47 @@ export const PageBuilder: React.FC = () => {
               </TabsContent>
 
               {/* ABA ÁRVORE DE CAMADAS */}
-              <TabsContent value="tree" className="flex-1 overflow-y-auto p-3 space-y-1.5 m-0">
-                <p className="text-xs font-bold text-slate-600 mb-2">Estrutura de Elementos</p>
-                {layout.root.children.map((childId, idx) => {
-                  const el = layout.elements[childId]
-                  if (!el) return null
-                  const isCurSelected = selectedId === el.id
-                  return (
-                    <div
-                      key={el.id}
-                      onClick={() => setSelectedId(el.id)}
-                      className={`p-2 rounded-lg border text-xs cursor-pointer flex items-center justify-between transition-colors ${
-                        isCurSelected
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-900 font-bold'
-                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-400 font-mono">#{idx + 1}</span>
-                        <span>{el.name || el.type}</span>
-                      </div>
-                      <span className="text-[10px] uppercase text-slate-400">{el.type}</span>
-                    </div>
-                  )
-                })}
+              <TabsContent value="tree" className="flex-1 overflow-y-auto p-3 space-y-2 m-0">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <p className="text-xs font-bold text-slate-700">Árvore de Elementos</p>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(null)}
+                    className="text-[10px] text-indigo-600 font-semibold hover:underline"
+                  >
+                    Ver Configs da Página
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  {layout.root.children.map((childId) => renderLayerNode(childId, 0))}
+                </div>
               </TabsContent>
             </Tabs>
           </aside>
         )}
 
-        {/* 2. CANVAS CENTRAL (Área de Visualização / Edição) */}
+        {/* 2. CANVAS CENTRAL COM AUTO-SCROLL E SEM LIMITE DE ALTURA */}
         <main
+          ref={canvasScrollContainerRef}
           onClick={() => setSelectedId(null)}
           className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center bg-slate-100/90 relative"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className={`${canvasWidthClass} min-h-[85vh] bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-300 flex flex-col`}
+            style={{
+              padding: pagePadding,
+              backgroundColor: layout.root.pageSettings?.backgroundColor || '#ffffff',
+            }}
+            className={`${canvasWidthClass} min-h-[85vh] rounded-2xl shadow-sm border border-slate-200 transition-all duration-300 flex flex-col`}
           >
             {layout.root.children.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-slate-400">
                 <Sparkles className="w-12 h-12 text-indigo-300 mb-3" />
                 <h3 className="text-base font-bold text-slate-700">Canvas Vazio</h3>
                 <p className="text-xs text-slate-400 max-w-sm mt-1">
-                  Clique nos elementos no painel esquerdo para começar a montar o catálogo visual ou
-                  selecione um template pronto.
+                  Clique nos elementos no painel esquerdo para começar a montar a árvore do
+                  catálogo.
                 </p>
               </div>
             ) : (
@@ -623,10 +865,17 @@ export const PageBuilder: React.FC = () => {
                     key={el.id}
                     element={el}
                     allElements={layout.elements}
+                    parentElement={null}
                     breakpoint={breakpoint}
                     isEditor={!isPreview}
                     selectedId={selectedId}
                     onSelectElement={(id) => setSelectedId(id)}
+                    onUpdateElement={handleUpdateElement}
+                    onDuplicateElement={handleDuplicateElement}
+                    onDeleteElement={handleDeleteElement}
+                    onMoveUp={handleMoveUp}
+                    onMoveDown={handleMoveDown}
+                    onAddChild={handleAddChildToElement}
                     products={realProducts}
                     companyInfo={{
                       name: 'VendasPro Store Matriz',
@@ -646,15 +895,22 @@ export const PageBuilder: React.FC = () => {
           </div>
         </main>
 
-        {/* 3. PAINEL DIREITO: ESTILOS & PROPRIEDADES */}
+        {/* 3. PAINEL DIREITO: ESTILOS, LAYOUT, POSIÇÃO, FILHOS & CONFIGS DA PÁGINA */}
         {!isPreview && (
           <aside className="w-80 border-l border-slate-200 bg-white flex flex-col shrink-0 z-10">
             <ElementStylePanel
               element={selectedElement}
+              allElements={layout.elements}
+              parentElement={parentOfSelected}
+              pageSettings={layout.root.pageSettings}
               breakpoint={breakpoint}
+              products={realProducts}
               onUpdateElement={handleUpdateElement}
+              onUpdatePageSettings={handleUpdatePageSettings}
               onDeleteElement={handleDeleteElement}
               onDuplicateElement={handleDuplicateElement}
+              onSelectElement={(id) => setSelectedId(id)}
+              onAddChildToElement={handleAddChildToElement}
               onOpenMediaLibrary={() => setIsMediaModalOpen(true)}
               canCustomCode={can('templates.custom_html')}
             />

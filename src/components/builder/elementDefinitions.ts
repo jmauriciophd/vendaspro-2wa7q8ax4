@@ -6,8 +6,17 @@ export interface BuilderElementMeta {
   category: 'layout' | 'basic' | 'commerce' | 'marketing' | 'advanced'
   icon: string
   description: string
+  canHaveChildren?: boolean
+  allowedChildren?: PageBuilderElementType[]
   defaultContent: Record<string, any>
   defaultStyles: Record<string, any>
+  // Estrutura pré-fabricada de filhos se este elemento nascer como composto
+  initialChildrenTemplates?: Array<{
+    type: PageBuilderElementType
+    name: string
+    styles?: Record<string, any>
+    content?: Record<string, any>
+  }>
 }
 
 export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
@@ -17,7 +26,8 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
     label: 'Cabeçalho / Header',
     category: 'layout',
     icon: 'PanelTop',
-    description: 'Logo, dados de contato da empresa, badge do vendedor e botão do carrinho.',
+    canHaveChildren: true,
+    description: 'Logo, dados da empresa, vendedor e botão do pedido editáveis internamente.',
     defaultContent: {
       showLogo: true,
       showCompanyInfo: true,
@@ -29,6 +39,7 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
       backgroundColor: '#ffffff',
       borderBottom: '1px solid #e2e8f0',
       padding: '16px 24px',
+      width: '100%',
     },
   },
   {
@@ -36,7 +47,8 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
     label: 'Rodapé / Footer',
     category: 'layout',
     icon: 'PanelBottom',
-    description: 'Informações legais, CNPJ, contato do vendedor e selo de compra segura.',
+    canHaveChildren: true,
+    description: 'Informações legais, CNPJ, contato do vendedor e selo de segurança.',
     defaultContent: {
       showCompanyLegal: true,
       showSellerContact: true,
@@ -48,19 +60,25 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
       color: '#94a3b8',
       padding: '40px 24px',
       marginTop: '48px',
+      width: '100%',
     },
   },
   {
     type: 'section',
-    label: 'Seção',
+    label: 'Seção (Section)',
     category: 'layout',
     icon: 'SquareDashed',
-    description: 'Bloco de seção com largura máxima e padding personalizável.',
+    canHaveChildren: true,
+    description: 'Bloco de seção com largura total ou contida e padding padrão configurável.',
     defaultContent: {},
     defaultStyles: {
       maxWidth: '1200px',
       margin: '0 auto',
-      padding: '32px 16px',
+      paddingTop: '32px',
+      paddingBottom: '32px',
+      paddingLeft: '20px',
+      paddingRight: '20px',
+      width: '100%',
     },
   },
   {
@@ -68,11 +86,36 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
     label: 'Container',
     category: 'layout',
     icon: 'Box',
-    description: 'Container flexível para agrupar e organizar elementos.',
+    canHaveChildren: true,
+    description: 'Container flexível com espaçamento padrão para agrupar e organizar elementos.',
     defaultContent: {},
     defaultStyles: {
-      padding: '16px',
+      paddingTop: '20px',
+      paddingBottom: '20px',
+      paddingLeft: '20px',
+      paddingRight: '20px',
       borderRadius: '8px',
+      width: '100%',
+    },
+  },
+  {
+    type: 'card',
+    label: 'Card / Bloco Destacado',
+    category: 'layout',
+    icon: 'CreditCard',
+    canHaveChildren: true,
+    description: 'Cartão com borda, sombra e padding para destacar conteúdos.',
+    defaultContent: {},
+    defaultStyles: {
+      backgroundColor: '#ffffff',
+      border: '1px solid #e2e8f0',
+      borderRadius: '12px',
+      paddingTop: '20px',
+      paddingBottom: '20px',
+      paddingLeft: '20px',
+      paddingRight: '20px',
+      boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)',
+      width: '100%',
     },
   },
   {
@@ -80,6 +123,7 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
     label: 'Colunas',
     category: 'layout',
     icon: 'Columns2',
+    canHaveChildren: true,
     description: 'Grade de duas ou mais colunas lado a lado.',
     defaultContent: { columnsCount: 2 },
     defaultStyles: {
@@ -88,6 +132,7 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
       gridColumnsTablet: 2,
       gridColumnsMobile: 1,
       gap: '20px',
+      width: '100%',
     },
   },
   {
@@ -95,6 +140,7 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
     label: 'CSS Grid',
     category: 'layout',
     icon: 'LayoutGrid',
+    canHaveChildren: true,
     description: 'Grid flexível configurável por breakpoint.',
     defaultContent: {},
     defaultStyles: {
@@ -103,6 +149,7 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
       gridColumnsTablet: 2,
       gridColumnsMobile: 1,
       gap: '24px',
+      width: '100%',
     },
   },
   {
@@ -110,6 +157,7 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
     label: 'Flexbox',
     category: 'layout',
     icon: 'Rows3',
+    canHaveChildren: true,
     description: 'Contêiner flex com controle de alinhamento e direção.',
     defaultContent: {},
     defaultStyles: {
@@ -118,6 +166,7 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
       justifyContent: 'space-between',
       alignItems: 'center',
       gap: '16px',
+      width: '100%',
     },
   },
   {
@@ -200,13 +249,20 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
   },
   {
     type: 'video',
-    label: 'Vídeo (YouTube/Vimeo)',
+    label: 'Vídeo (YouTube/Vimeo/MP4)',
     category: 'basic',
     icon: 'Video',
-    description: 'Incorporação responsiva de vídeo promocional.',
+    canHaveChildren: false,
+    description: 'Vídeo promocional com URL configurável, proporção e controles.',
     defaultContent: {
-      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      url: '', // Vazio por padrão para não injetar links indesejados
+      sourceType: 'youtube', // 'youtube' | 'vimeo' | 'mp4' | 'embed'
       autoplay: false,
+      controls: true,
+      loop: false,
+      muted: false,
+      aspectRatio: '16/9',
+      poster: '',
     },
     defaultStyles: {
       width: '100%',
@@ -284,7 +340,9 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
     label: 'Produto em Destaque',
     category: 'commerce',
     icon: 'Tag',
-    description: 'Cartão detalhado de um produto específico com seletor de quantidade.',
+    canHaveChildren: true,
+    description:
+      'Produto do cadastro real com subcomponentes editáveis (Imagem, Preço, Botão de Compra).',
     defaultContent: {
       productId: '',
       showGallery: true,
@@ -296,10 +354,102 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
     },
     defaultStyles: {
       backgroundColor: '#ffffff',
-      padding: '24px',
+      paddingTop: '24px',
+      paddingBottom: '24px',
+      paddingLeft: '24px',
+      paddingRight: '24px',
       borderRadius: '16px',
       border: '1px solid #e2e8f0',
       boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)',
+      width: '100%',
+    },
+  },
+  {
+    type: 'product_card',
+    label: 'Card de Produto (Subárvore)',
+    category: 'commerce',
+    icon: 'ShoppingBag',
+    canHaveChildren: true,
+    description: 'Estrutura editável do Card de Produto: Imagem, Título, Preço e Botão.',
+    defaultContent: {
+      productId: '',
+    },
+    defaultStyles: {
+      backgroundColor: '#ffffff',
+      border: '1px solid #e2e8f0',
+      borderRadius: '16px',
+      padding: '16px',
+      width: '100%',
+    },
+  },
+  {
+    type: 'product_image',
+    label: 'Imagem do Produto (Dinâmica)',
+    category: 'commerce',
+    icon: 'Image',
+    canHaveChildren: false,
+    description: 'Vinculada à foto do produto no catálogo ou imagem personalizada.',
+    defaultContent: {
+      useDynamic: true,
+      customSrc: '',
+      alt: 'Imagem do produto',
+    },
+    defaultStyles: {
+      width: '100%',
+      aspectRatio: '1/1',
+      borderRadius: '12px',
+      objectFit: 'cover',
+    },
+  },
+  {
+    type: 'product_name',
+    label: 'Nome do Produto (Dinâmico)',
+    category: 'commerce',
+    icon: 'Heading',
+    canHaveChildren: false,
+    description: 'Título vinculado ao cadastro do produto ou texto personalizado.',
+    defaultContent: {
+      useDynamic: true,
+      customText: '',
+    },
+    defaultStyles: {
+      fontSize: '16px',
+      fontWeight: '700',
+      color: '#0f172a',
+      marginBottom: '6px',
+    },
+  },
+  {
+    type: 'product_price',
+    label: 'Preço Comercial (Dinâmico)',
+    category: 'commerce',
+    icon: 'Tag',
+    canHaveChildren: false,
+    description: 'Preço real calculado com moeda e regras comerciais.',
+    defaultContent: {
+      showCurrency: true,
+      labelPrefix: 'Valor unitário:',
+    },
+    defaultStyles: {
+      fontSize: '20px',
+      fontWeight: '900',
+      color: '#4f46e5',
+      marginBottom: '12px',
+    },
+  },
+  {
+    type: 'product_stock',
+    label: 'Badge de Estoque (Dinâmico)',
+    category: 'commerce',
+    icon: 'Layers',
+    canHaveChildren: false,
+    description: 'Status do estoque em tempo real (Disponível / Esgotado).',
+    defaultContent: {},
+    defaultStyles: {
+      fontSize: '11px',
+      fontWeight: '600',
+      color: '#059669',
+      marginBottom: '8px',
     },
   },
   {
@@ -380,7 +530,9 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
     label: 'Hero Section',
     category: 'marketing',
     icon: 'Sparkle',
-    description: 'Seção principal de impacto com título grande, subtítulo e dois botões de ação.',
+    canHaveChildren: true,
+    description:
+      'Seção principal com árvore de filhos totalmente editáveis (Badge, Título, Texto, Botões).',
     defaultContent: {
       title: 'Bem-vindo ao Catálogo Oficial VendasPro',
       subtitle:
@@ -393,8 +545,12 @@ export const ELEMENT_DEFINITIONS: BuilderElementMeta[] = [
     defaultStyles: {
       backgroundColor: '#0f172a',
       color: '#ffffff',
-      padding: '64px 24px',
+      paddingTop: '64px',
+      paddingBottom: '64px',
+      paddingLeft: '24px',
+      paddingRight: '24px',
       textAlign: 'center',
+      width: '100%',
     },
   },
   {

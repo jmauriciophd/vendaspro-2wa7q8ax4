@@ -1,5 +1,6 @@
 import React from 'react'
-import type { BuilderElement, Breakpoint } from '@/types/builder'
+import type { BuilderElement, Breakpoint, PageSettings } from '@/types/builder'
+import type { Product } from '@/types/crm'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,120 +27,53 @@ import {
   Unlink2,
   Move,
   Layers as LayersIcon,
+  Video as VideoIcon,
+  ShoppingBag,
+  ExternalLink,
+  Plus,
+  ArrowUp,
+  Settings,
 } from 'lucide-react'
+import { ELEMENT_DEFINITIONS } from './elementDefinitions'
 
 interface ElementStylePanelProps {
   element: BuilderElement | null
+  allElements?: Record<string, BuilderElement>
+  parentElement?: BuilderElement | null
+  pageSettings?: PageSettings
   breakpoint: Breakpoint
+  products?: Product[]
   onUpdateElement: (updated: BuilderElement) => void
+  onUpdatePageSettings?: (settings: PageSettings) => void
   onDeleteElement: (id: string) => void
   onDuplicateElement: (id: string) => void
+  onSelectElement?: (id: string) => void
+  onAddChildToElement?: (parentId: string, type: string) => void
   onOpenMediaLibrary: () => void
   canCustomCode?: boolean
 }
 
 export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
   element,
+  allElements = {},
+  parentElement = null,
+  pageSettings = {},
   breakpoint,
+  products = [],
   onUpdateElement,
+  onUpdatePageSettings,
   onDeleteElement,
   onDuplicateElement,
+  onSelectElement,
+  onAddChildToElement,
   onOpenMediaLibrary,
   canCustomCode = false,
 }) => {
-  // Estado local para vincular/sincronizar os 4 lados de padding e margin (Hooks sempre no topo)
   const [paddingLinked, setPaddingLinked] = React.useState(false)
   const [marginLinked, setMarginLinked] = React.useState(false)
+  const [showPageSettingsModal, setShowPageSettingsModal] = React.useState(false)
 
-  if (!element) {
-    return (
-      <div className="p-6 text-center text-slate-400">
-        <Sliders className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-        <p className="text-sm font-semibold text-slate-600">Nenhum elemento selecionado</p>
-        <p className="text-xs text-slate-400 mt-1">
-          Clique em qualquer componente no canvas para editar propriedades, textos, cores e layout.
-        </p>
-      </div>
-    )
-  }
-
-  // Helper para atualizar propriedades de conteúdo
-  const updateContent = (field: string, value: any) => {
-    onUpdateElement({
-      ...element,
-      content: {
-        ...(element.content || {}),
-        [field]: value,
-      },
-    })
-  }
-
-  // Helper para atualizar estilos (aplicado ao breakpoint ativo quando responsivo)
-  const updateStyle = (styleProp: string, value: any) => {
-    if (breakpoint === 'desktop') {
-      const nextStyles = {
-        ...(element.styles || {}),
-        [styleProp]: value,
-      }
-      // Se o valor for undefined/vazio e quisermos limpar, mantemos limpo
-      if (value === undefined || value === '') {
-        delete nextStyles[styleProp as keyof typeof nextStyles]
-      }
-      onUpdateElement({
-        ...element,
-        styles: nextStyles,
-      })
-    } else {
-      const nextBreakpointStyles = {
-        ...(element.responsiveStyles?.[breakpoint] || {}),
-        [styleProp]: value,
-      }
-      if (value === undefined || value === '') {
-        delete nextBreakpointStyles[styleProp as keyof typeof nextBreakpointStyles]
-      }
-      onUpdateElement({
-        ...element,
-        responsiveStyles: {
-          ...(element.responsiveStyles || {}),
-          [breakpoint]: nextBreakpointStyles,
-        },
-      })
-    }
-  }
-
-  // Helper para atualizar múltiplos estilos de uma vez
-  const updateMultipleStyles = (stylesToUpdate: Record<string, any>) => {
-    if (breakpoint === 'desktop') {
-      const nextStyles = {
-        ...(element.styles || {}),
-        ...stylesToUpdate,
-      }
-      onUpdateElement({
-        ...element,
-        styles: nextStyles,
-      })
-    } else {
-      const nextBreakpointStyles = {
-        ...(element.responsiveStyles?.[breakpoint] || {}),
-        ...stylesToUpdate,
-      }
-      onUpdateElement({
-        ...element,
-        responsiveStyles: {
-          ...(element.responsiveStyles || {}),
-          [breakpoint]: nextBreakpointStyles,
-        },
-      })
-    }
-  }
-
-  // Obtém o valor do estilo efetivo (considerando herança de desktop se não definido no breakpoint)
-  const currentStyles = {
-    ...(element.styles || {}),
-    ...(element.responsiveStyles?.[breakpoint] || {}),
-  }
-
-  // Funções utilitárias para decompor e compor valor e unidade (ex: "16px", "2rem", "auto", "100%")
+  // Funções utilitárias para decompor e compor valor e unidade
   const parseValueAndUnit = (cssValue?: string | number, defaultUnit = 'px') => {
     if (cssValue === undefined || cssValue === null || cssValue === '') {
       return { value: '', unit: defaultUnit }
@@ -235,70 +169,267 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
     )
   }
 
-  return (
-    <div className="h-full flex flex-col bg-white">
-      {/* Top Header do Painel */}
-      <div className="p-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
-            {element.type.slice(0, 2).toUpperCase()}
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-800 leading-tight">
-              {element.name || element.type}
-            </p>
-            <p className="text-[10px] text-slate-400 font-mono">ID: {element.id}</p>
+  // Painel Geral de Configurações da Página quando nenhum elemento estiver selecionado
+  if (!element) {
+    return (
+      <div className="h-full flex flex-col bg-white overflow-y-auto">
+        <div className="p-4 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-2">
+            <Settings className="w-5 h-5 text-indigo-600" />
+            <div>
+              <h3 className="text-xs font-bold text-slate-900">Configurações da Página</h3>
+              <p className="text-[10px] text-slate-400">Espaçamento e estilos globais do canvas</p>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onDuplicateElement(element.id)}
-            className="w-7 h-7 text-slate-500 hover:text-indigo-600"
-            title="Duplicar elemento"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </Button>
-          {!element.locked && (
+        <div className="p-4 space-y-4">
+          <div className="space-y-3">
+            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              Espaçamento Global da Página
+            </h4>
+            <UnitInput
+              label="Padding Desktop (Padrão: 24px)"
+              value={pageSettings.pagePaddingDesktop || '24px'}
+              onChange={(v) => onUpdatePageSettings?.({ ...pageSettings, pagePaddingDesktop: v })}
+              placeholder="24px"
+            />
+            <UnitInput
+              label="Padding Tablet (Padrão: 20px)"
+              value={pageSettings.pagePaddingTablet || '20px'}
+              onChange={(v) => onUpdatePageSettings?.({ ...pageSettings, pagePaddingTablet: v })}
+              placeholder="20px"
+            />
+            <UnitInput
+              label="Padding Smartphone (Padrão: 16px)"
+              value={pageSettings.pagePaddingMobile || '16px'}
+              onChange={(v) => onUpdatePageSettings?.({ ...pageSettings, pagePaddingMobile: v })}
+              placeholder="16px"
+            />
+          </div>
+
+          <div className="space-y-3 pt-3 border-t border-slate-200">
+            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              Largura e Fundo da Página
+            </h4>
+            <UnitInput
+              label="Largura Máxima do Conteúdo (Padrão: 1200px)"
+              value={pageSettings.pageMaxWidth || '1200px'}
+              onChange={(v) => onUpdatePageSettings?.({ ...pageSettings, pageMaxWidth: v })}
+              placeholder="1200px"
+            />
+
+            <div>
+              <Label className="text-xs">Cor de Fundo da Página</Label>
+              <div className="flex gap-2 items-center mt-1">
+                <input
+                  type="color"
+                  value={pageSettings.backgroundColor || '#f8fafc'}
+                  onChange={(e) =>
+                    onUpdatePageSettings?.({ ...pageSettings, backgroundColor: e.target.value })
+                  }
+                  className="w-8 h-8 rounded border border-slate-200 cursor-pointer"
+                />
+                <Input
+                  value={pageSettings.backgroundColor || '#f8fafc'}
+                  onChange={(e) =>
+                    onUpdatePageSettings?.({ ...pageSettings, backgroundColor: e.target.value })
+                  }
+                  className="text-xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-center">
+            <Sliders className="w-6 h-6 text-indigo-500 mx-auto mb-1.5" />
+            <p className="text-xs font-bold text-indigo-900">Selecione um elemento</p>
+            <p className="text-[10px] text-indigo-700 mt-0.5">
+              Clique em qualquer seção, texto, botão ou imagem para editar suas propriedades
+              específicas.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Helper para atualizar propriedades de conteúdo
+  const updateContent = (field: string, value: any) => {
+    onUpdateElement({
+      ...element,
+      content: {
+        ...(element.content || {}),
+        [field]: value,
+      },
+    })
+  }
+
+  // Helper para atualizar estilos (aplicado ao breakpoint ativo quando responsivo)
+  const updateStyle = (styleProp: string, value: any) => {
+    if (breakpoint === 'desktop') {
+      const nextStyles = {
+        ...(element.styles || {}),
+        [styleProp]: value,
+      }
+      if (value === undefined || value === '') {
+        delete nextStyles[styleProp as keyof typeof nextStyles]
+      }
+      onUpdateElement({
+        ...element,
+        styles: nextStyles,
+      })
+    } else {
+      const nextBreakpointStyles = {
+        ...(element.responsiveStyles?.[breakpoint] || {}),
+        [styleProp]: value,
+      }
+      if (value === undefined || value === '') {
+        delete nextBreakpointStyles[styleProp as keyof typeof nextBreakpointStyles]
+      }
+      onUpdateElement({
+        ...element,
+        responsiveStyles: {
+          ...(element.responsiveStyles || {}),
+          [breakpoint]: nextBreakpointStyles,
+        },
+      })
+    }
+  }
+
+  // Helper para atualizar múltiplos estilos de uma vez
+  const updateMultipleStyles = (stylesToUpdate: Record<string, any>) => {
+    if (breakpoint === 'desktop') {
+      const nextStyles = {
+        ...(element.styles || {}),
+        ...stylesToUpdate,
+      }
+      onUpdateElement({
+        ...element,
+        styles: nextStyles,
+      })
+    } else {
+      const nextBreakpointStyles = {
+        ...(element.responsiveStyles?.[breakpoint] || {}),
+        ...stylesToUpdate,
+      }
+      onUpdateElement({
+        ...element,
+        responsiveStyles: {
+          ...(element.responsiveStyles || {}),
+          [breakpoint]: nextBreakpointStyles,
+        },
+      })
+    }
+  }
+
+  const currentStyles = {
+    ...(element.styles || {}),
+    ...(element.responsiveStyles?.[breakpoint] || {}),
+  }
+
+  const isParentContainer =
+    element.type === 'section' ||
+    element.type === 'container' ||
+    element.type === 'card' ||
+    element.type === 'columns' ||
+    element.type === 'grid' ||
+    element.type === 'flexbox' ||
+    element.type === 'hero' ||
+    element.type === 'header' ||
+    element.type === 'footer' ||
+    element.type === 'product_single' ||
+    element.type === 'product_card'
+
+  return (
+    <div className="h-full flex flex-col bg-white">
+      {/* Top Header do Painel com Breadcrumb / Parent */}
+      <div className="p-3 border-b border-slate-200 bg-slate-50 space-y-2">
+        {parentElement && (
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => onSelectElement?.(parentElement.id)}
+              className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
+            >
+              <ArrowUp className="w-3.5 h-3.5" />
+              <span>Pai: {parentElement.name || parentElement.type}</span>
+            </button>
+            <span className="text-[10px] text-slate-400 font-mono">
+              #{parentElement.id.slice(-4)}
+            </span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
+              {element.type.slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-800 leading-tight">
+                {element.name || element.type}
+              </p>
+              <p className="text-[10px] text-slate-400 font-mono">ID: {element.id}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => onDeleteElement(element.id)}
-              className="w-7 h-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
-              title="Excluir elemento"
+              onClick={() => onDuplicateElement(element.id)}
+              className="w-7 h-7 text-slate-500 hover:text-indigo-600"
+              title="Duplicar elemento"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Copy className="w-3.5 h-3.5" />
             </Button>
-          )}
-          {element.locked && (
-            <span
-              className="p-1 text-amber-600 bg-amber-50 rounded"
-              title="Elemento bloqueado pelo sistema"
-            >
-              <Lock className="w-3.5 h-3.5" />
-            </span>
-          )}
+            {!element.locked && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onDeleteElement(element.id)}
+                className="w-7 h-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                title="Excluir elemento"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            {element.locked && (
+              <span
+                className="p-1 text-amber-600 bg-amber-50 rounded"
+                title="Elemento bloqueado pelo sistema"
+              >
+                <Lock className="w-3.5 h-3.5" />
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Tabs com as 5 abas obrigatórias: Conteúdo, Estilo, Layout, Responsivo, Avançado */}
+      {/* Tabs Principais com 6 Abas */}
       <Tabs defaultValue="content" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="grid grid-cols-5 p-1 bg-slate-100/80 rounded-none border-b border-slate-200">
-          <TabsTrigger value="content" className="text-[11px] py-1">
+        <TabsList
+          className={`grid ${isParentContainer ? 'grid-cols-6' : 'grid-cols-5'} p-1 bg-slate-100/80 rounded-none border-b border-slate-200`}
+        >
+          <TabsTrigger value="content" className="text-[10px] py-1">
             Conteúdo
           </TabsTrigger>
-          <TabsTrigger value="style" className="text-[11px] py-1">
+          <TabsTrigger value="style" className="text-[10px] py-1">
             Estilo
           </TabsTrigger>
-          <TabsTrigger value="layout" className="text-[11px] py-1">
+          <TabsTrigger value="layout" className="text-[10px] py-1">
             Layout
           </TabsTrigger>
-          <TabsTrigger value="responsive" className="text-[11px] py-1">
-            Resp.
+          <TabsTrigger value="position" className="text-[10px] py-1">
+            Posição
           </TabsTrigger>
-          <TabsTrigger value="advanced" className="text-[11px] py-1">
+          {isParentContainer && (
+            <TabsTrigger value="children" className="text-[10px] py-1 text-indigo-700 font-bold">
+              Filhos
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="advanced" className="text-[10px] py-1">
             Avançado
           </TabsTrigger>
         </TabsList>
@@ -316,31 +447,53 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
               />
             </div>
 
-            {/* Elementos de Texto / Título */}
+            {/* Heading e Text */}
             {(element.type === 'heading' || element.type === 'text') && (
-              <div>
-                <Label className="text-xs font-semibold text-slate-700">Texto / Shortcodes</Label>
-                <textarea
-                  rows={4}
-                  value={element.content?.text || ''}
-                  onChange={(e) => updateContent('text', e.target.value)}
-                  placeholder="Ex: Olá {{cliente.nome}}, confira nossas ofertas..."
-                  className="w-full text-xs p-2 rounded-md border border-slate-200 focus:outline-indigo-600 mt-1"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Variáveis:{' '}
-                  <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">
-                    {'{{cliente.nome}}'}
-                  </code>
-                  ,{' '}
-                  <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">
-                    {'{{vendedor.nome}}'}
-                  </code>
-                </p>
+              <div className="space-y-3">
+                {element.type === 'heading' && (
+                  <div>
+                    <Label className="text-xs font-semibold text-slate-700">Tag HTML</Label>
+                    <Select
+                      value={element.content?.tag || 'h2'}
+                      onValueChange={(v) => updateContent('tag', v)}
+                    >
+                      <SelectTrigger className="text-xs mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="h1">H1 - Título Principal</SelectItem>
+                        <SelectItem value="h2">H2 - Seção</SelectItem>
+                        <SelectItem value="h3">H3 - Subseção</SelectItem>
+                        <SelectItem value="h4">H4 - Pequeno</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div>
+                  <Label className="text-xs font-semibold text-slate-700">Texto / Variáveis</Label>
+                  <textarea
+                    rows={4}
+                    value={element.content?.text || ''}
+                    onChange={(e) => updateContent('text', e.target.value)}
+                    placeholder="Insira o texto ou clique duas vezes no canvas para editar..."
+                    className="w-full text-xs p-2 rounded-md border border-slate-200 focus:outline-indigo-600 mt-1"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Variáveis disponíveis:{' '}
+                    <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">
+                      {'{{cliente.nome}}'}
+                    </code>
+                    ,{' '}
+                    <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">
+                      {'{{vendedor.nome}}'}
+                    </code>
+                  </p>
+                </div>
               </div>
             )}
 
-            {/* Imagem */}
+            {/* Imagem Completa */}
             {element.type === 'image' && (
               <div className="space-y-3">
                 <div>
@@ -364,6 +517,7 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                     </Button>
                   </div>
                 </div>
+
                 <div>
                   <Label className="text-xs font-semibold text-slate-700">
                     Texto Alternativo (Alt)
@@ -375,45 +529,119 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                     className="text-xs mt-1"
                   />
                 </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Object Fit</Label>
+                    <Select
+                      value={currentStyles.backgroundSize || 'cover'}
+                      onValueChange={(v) => updateStyle('backgroundSize', v)}
+                    >
+                      <SelectTrigger className="text-xs mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cover">Cover (Preencher)</SelectItem>
+                        <SelectItem value="contain">Contain (Conter)</SelectItem>
+                        <SelectItem value="auto">Original</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Link ao Clicar</Label>
+                    <Input
+                      value={element.content?.link || ''}
+                      onChange={(e) => updateContent('link', e.target.value)}
+                      placeholder="#produtos ou URL"
+                      className="text-xs mt-1"
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Banner & Hero */}
-            {(element.type === 'banner' || element.type === 'hero') && (
+            {/* Vídeo Completo e Configurável */}
+            {element.type === 'video' && (
               <div className="space-y-3">
                 <div>
-                  <Label className="text-xs font-semibold text-slate-700">Badge Superior</Label>
+                  <Label className="text-xs font-semibold text-slate-700">URL do Vídeo</Label>
                   <Input
-                    value={element.content?.badge || ''}
-                    onChange={(e) => updateContent('badge', e.target.value)}
-                    placeholder="Ex: OFERTA DA SEMANA"
+                    value={element.content?.url || ''}
+                    onChange={(e) => updateContent('url', e.target.value)}
+                    placeholder="Ex: https://www.youtube.com/watch?v=... ou Vimeo"
                     className="text-xs mt-1"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Suporta links diretos do YouTube, Vimeo e vídeos MP4 autorizados.
+                  </p>
                 </div>
-                <div>
-                  <Label className="text-xs font-semibold text-slate-700">Título Principal</Label>
-                  <Input
-                    value={element.content?.title || ''}
-                    onChange={(e) => updateContent('title', e.target.value)}
-                    placeholder="Ex: Tabela Especial Distribuidora"
-                    className="text-xs mt-1"
-                  />
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Proporção (Aspect Ratio)</Label>
+                    <Select
+                      value={element.content?.aspectRatio || '16/9'}
+                      onValueChange={(v) => {
+                        updateContent('aspectRatio', v)
+                        updateStyle('aspectRatio', v)
+                      }}
+                    >
+                      <SelectTrigger className="text-xs mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="16/9">16:9 (Widescreen)</SelectItem>
+                        <SelectItem value="4/3">4:3 (Padrão)</SelectItem>
+                        <SelectItem value="1/1">1:1 (Quadrado)</SelectItem>
+                        <SelectItem value="9/16">9:16 (Vertical / Reels)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Poster / Capa (URL)</Label>
+                    <Input
+                      value={element.content?.poster || ''}
+                      onChange={(e) => updateContent('poster', e.target.value)}
+                      placeholder="https://..."
+                      className="text-xs mt-1"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-xs font-semibold text-slate-700">
-                    Subtítulo / Descrição
-                  </Label>
-                  <textarea
-                    rows={2}
-                    value={element.content?.subtitle || ''}
-                    onChange={(e) => updateContent('subtitle', e.target.value)}
-                    className="w-full text-xs p-2 rounded-md border border-slate-200 mt-1"
-                  />
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Autoplay</Label>
+                    <Switch
+                      checked={element.content?.autoplay === true}
+                      onCheckedChange={(v) => updateContent('autoplay', v)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Mudo (Muted)</Label>
+                    <Switch
+                      checked={element.content?.muted === true}
+                      onCheckedChange={(v) => updateContent('muted', v)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Repetir (Loop)</Label>
+                    <Switch
+                      checked={element.content?.loop === true}
+                      onCheckedChange={(v) => updateContent('loop', v)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Controles</Label>
+                    <Switch
+                      checked={element.content?.controls !== false}
+                      onCheckedChange={(v) => updateContent('controls', v)}
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Botão */}
+            {/* Botão Comercial */}
             {element.type === 'button' && (
               <div className="space-y-3">
                 <div>
@@ -425,20 +653,141 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                   />
                 </div>
                 <div>
-                  <Label className="text-xs font-semibold text-slate-700">Link de Destino</Label>
+                  <Label className="text-xs font-semibold text-slate-700">Link ou Ação</Label>
                   <Input
                     value={element.content?.link || ''}
                     onChange={(e) => updateContent('link', e.target.value)}
-                    placeholder="#produtos ou URL"
+                    placeholder="#produtos, link comercial ou WhatsApp"
                     className="text-xs mt-1"
                   />
                 </div>
+                <div>
+                  <Label className="text-xs font-semibold text-slate-700">
+                    Ação Comercial Rápida
+                  </Label>
+                  <Select
+                    value={element.content?.actionType || 'link'}
+                    onValueChange={(v) => updateContent('actionType', v)}
+                  >
+                    <SelectTrigger className="text-xs mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="link">Abrir Link / Âncora</SelectItem>
+                      <SelectItem value="open_cart">Abrir Carrinho do Pedido</SelectItem>
+                      <SelectItem value="open_checkout">Ir Direto para Pagamento</SelectItem>
+                      <SelectItem value="whatsapp">Chamar Vendedor no WhatsApp</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {/* Produto Único / Destaque / Subcomponentes do Produto */}
+            {element.type === 'product_single' && (
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs font-semibold text-slate-700">
+                    Selecionar Produto do Cadastro Real
+                  </Label>
+                  <Select
+                    value={element.content?.productId || ''}
+                    onValueChange={(v) => updateContent('productId', v)}
+                  >
+                    <SelectTrigger className="text-xs mt-1">
+                      <SelectValue placeholder="Selecione um produto cadastrado..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name} — R$ {Number(p.price || 0).toFixed(2)} ({p.stock || 0} em
+                          estoque)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {/* Subcomponentes do Produto: product_name, product_image, product_price */}
+            {element.type === 'product_name' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-slate-700">
+                    🔗 Vincular ao Nome do Produto Real
+                  </Label>
+                  <Switch
+                    checked={element.content?.useDynamic !== false}
+                    onCheckedChange={(v) => updateContent('useDynamic', v)}
+                  />
+                </div>
+                {element.content?.useDynamic === false && (
+                  <div>
+                    <Label className="text-xs">Texto Personalizado</Label>
+                    <Input
+                      value={element.content?.customText || ''}
+                      onChange={(e) => updateContent('customText', e.target.value)}
+                      className="text-xs mt-1"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {element.type === 'product_image' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-slate-700">
+                    🔗 Vincular à Imagem do Cadastro
+                  </Label>
+                  <Switch
+                    checked={element.content?.useDynamic !== false}
+                    onCheckedChange={(v) => updateContent('useDynamic', v)}
+                  />
+                </div>
+                {element.content?.useDynamic === false && (
+                  <div className="flex gap-2">
+                    <Input
+                      value={element.content?.customSrc || ''}
+                      onChange={(e) => updateContent('customSrc', e.target.value)}
+                      placeholder="https://..."
+                      className="text-xs"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={onOpenMediaLibrary}
+                      className="text-xs shrink-0"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5 text-indigo-600" />
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
             {/* Grade de Produtos */}
             {element.type === 'product_list' && (
               <div className="space-y-3">
+                <div>
+                  <Label className="text-xs font-semibold text-slate-700">Fonte dos Produtos</Label>
+                  <Select
+                    value={element.content?.filterSource || 'all'}
+                    onValueChange={(v) => updateContent('filterSource', v)}
+                  >
+                    <SelectTrigger className="text-xs mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os Produtos Cadastrados</SelectItem>
+                      <SelectItem value="in_stock">Apenas com Estoque Positivo</SelectItem>
+                      <SelectItem value="featured">Destaques Comerciais</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-semibold text-slate-700">Mostrar Preço Real</Label>
                   <Switch
@@ -464,19 +813,11 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                     onCheckedChange={(v) => updateContent('showBuyButton', v)}
                   />
                 </div>
-                <div>
-                  <Label className="text-xs font-semibold text-slate-700">Texto do Botão</Label>
-                  <Input
-                    value={element.content?.buyButtonText || 'Comprar'}
-                    onChange={(e) => updateContent('buyButtonText', e.target.value)}
-                    className="text-xs mt-1"
-                  />
-                </div>
               </div>
             )}
           </TabsContent>
 
-          {/* 2. ABA ESTILO */}
+          {/* 2. ABA ESTILO (Cores, Gradientes, Tipografia Granular) */}
           <TabsContent value="style" className="m-0 space-y-4">
             <div className="space-y-3">
               <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
@@ -553,10 +894,9 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
 
             <div className="space-y-3 pt-3 border-t border-slate-200">
               <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                <Type className="w-3 h-3" /> Tipografia Avançada
+                <Type className="w-3 h-3" /> Tipografia Granular
               </h4>
 
-              {/* Família da Fonte */}
               <div>
                 <Label className="text-xs">Família de Fonte</Label>
                 <Select
@@ -581,28 +921,22 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                     </SelectItem>
                     <SelectItem value="'Merriweather', serif">Merriweather (Serif)</SelectItem>
                     <SelectItem value="'Fira Code', monospace">Fira Code (Monospace)</SelectItem>
-                    <SelectItem value="'Courier New', monospace">
-                      Courier New (Monospace)
-                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Tamanho e Peso da Fonte */}
               <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <UnitInput
-                    label="Tamanho da Fonte"
-                    value={currentStyles.fontSize}
-                    onChange={(v) => updateStyle('fontSize', v)}
-                    placeholder="16"
-                    allowAuto={false}
-                    units={['px', 'rem', 'em', '%']}
-                  />
-                </div>
+                <UnitInput
+                  label="Tamanho da Fonte"
+                  value={currentStyles.fontSize}
+                  onChange={(v) => updateStyle('fontSize', v)}
+                  placeholder="16"
+                  allowAuto={false}
+                  units={['px', 'rem', 'em', '%']}
+                />
                 <div>
                   <span className="text-[10px] font-medium text-slate-500 block mb-1">
-                    Peso da Fonte
+                    Peso da Fonte (Weight)
                   </span>
                   <Select
                     value={String(currentStyles.fontWeight || '400')}
@@ -612,8 +946,6 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                       <SelectValue placeholder="400" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="100">100 - Thin</SelectItem>
-                      <SelectItem value="200">200 - Extra Light</SelectItem>
                       <SelectItem value="300">300 - Light</SelectItem>
                       <SelectItem value="400">400 - Normal</SelectItem>
                       <SelectItem value="500">500 - Medium</SelectItem>
@@ -626,33 +958,27 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                 </div>
               </div>
 
-              {/* Line Height e Letter Spacing */}
               <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <UnitInput
-                    label="Altura da Linha (Line Height)"
-                    value={currentStyles.lineHeight}
-                    onChange={(v) => updateStyle('lineHeight', v)}
-                    placeholder="1.5"
-                    allowAuto={true}
-                    units={['', 'px', 'em', 'rem', '%', 'auto']}
-                  />
-                </div>
-                <div>
-                  <UnitInput
-                    label="Espaçamento (Letter Spacing)"
-                    value={currentStyles.letterSpacing}
-                    onChange={(v) => updateStyle('letterSpacing', v)}
-                    placeholder="0"
-                    allowAuto={false}
-                    units={['px', 'em', 'rem']}
-                  />
-                </div>
+                <UnitInput
+                  label="Altura da Linha (Line Height)"
+                  value={currentStyles.lineHeight}
+                  onChange={(v) => updateStyle('lineHeight', v)}
+                  placeholder="1.5"
+                  allowAuto={true}
+                  units={['', 'px', 'em', 'rem', '%', 'auto']}
+                />
+                <UnitInput
+                  label="Espaçamento Letras (Letter Spacing)"
+                  value={currentStyles.letterSpacing}
+                  onChange={(v) => updateStyle('letterSpacing', v)}
+                  placeholder="0"
+                  allowAuto={false}
+                  units={['px', 'em', 'rem']}
+                />
               </div>
 
-              {/* Alinhamento e Transformação de Texto */}
               <div>
-                <Label className="text-xs">Alinhamento</Label>
+                <Label className="text-xs">Alinhamento do Texto</Label>
                 <div className="grid grid-cols-4 gap-1 mt-1">
                   {['left', 'center', 'right', 'justify'].map((align) => (
                     <Button
@@ -668,26 +994,6 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                   ))}
                 </div>
               </div>
-
-              <div>
-                <Label className="text-xs">Transformação de Texto</Label>
-                <Select
-                  value={currentStyles.textTransform || 'none'}
-                  onValueChange={(v) => updateStyle('textTransform', v)}
-                >
-                  <SelectTrigger className="text-xs mt-1">
-                    <SelectValue placeholder="Nenhum" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum (Padrão)</SelectItem>
-                    <SelectItem value="uppercase">MAIÚSCULAS (UPPERCASE)</SelectItem>
-                    <SelectItem value="lowercase">minúsculas (lowercase)</SelectItem>
-                    <SelectItem value="capitalize">
-                      Primeira Letra Maiúscula (Capitalize)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             <div className="space-y-3 pt-3 border-t border-slate-200">
@@ -695,15 +1001,13 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                 Bordas e Cantos
               </h4>
               <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Arredondamento</Label>
-                  <Input
-                    value={currentStyles.borderRadius || ''}
-                    onChange={(e) => updateStyle('borderRadius', e.target.value)}
-                    placeholder="12px"
-                    className="text-xs mt-1"
-                  />
-                </div>
+                <UnitInput
+                  label="Arredondamento (Border Radius)"
+                  value={currentStyles.borderRadius}
+                  onChange={(v) => updateStyle('borderRadius', v)}
+                  placeholder="12px"
+                  units={['px', '%', 'rem', 'em']}
+                />
                 <div>
                   <Label className="text-xs">Borda (CSS)</Label>
                   <Input
@@ -717,15 +1021,14 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
             </div>
           </TabsContent>
 
-          {/* 3. ABA LAYOUT */}
+          {/* 3. ABA LAYOUT (Padding/Margin Granulares com Unidades e Sincronizador) */}
           <TabsContent value="layout" className="m-0 space-y-4">
-            {/* 3.1 ESPAÇAMENTOS GRANULARES (PADDING E MARGIN) */}
             <div className="space-y-4">
               <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                 <Layout className="w-3 h-3" /> Espaçamentos (Padding / Margin)
               </h4>
 
-              {/* PADDING (4 LADOS COM SELETOR DE UNIDADE E BOTÃO CORRENTE) */}
+              {/* PADDING COM 4 LADOS E CORRENTE */}
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-700">Padding Interno</span>
@@ -834,7 +1137,7 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                 </div>
               </div>
 
-              {/* MARGIN (4 LADOS COM SELETOR DE UNIDADE E BOTÃO CORRENTE) */}
+              {/* MARGIN COM 4 LADOS E CORRENTE */}
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-700">Margem Externa</span>
@@ -961,9 +1264,9 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
 
               <div className="grid grid-cols-2 gap-2">
                 <UnitInput
-                  label="Altura (Height)"
-                  value={currentStyles.height}
-                  onChange={(v) => updateStyle('height', v)}
+                  label="Altura Mínima (Min Height)"
+                  value={currentStyles.minHeight}
+                  onChange={(v) => updateStyle('minHeight', v)}
                   placeholder="auto"
                 />
                 <UnitInput
@@ -974,14 +1277,56 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                 />
               </div>
             </div>
+          </TabsContent>
 
-            {/* 3.2 POSICIONAMENTO PROFISSIONAL (POSITION, TOP/RIGHT/BOTTOM/LEFT, Z-INDEX) */}
-            <div className="space-y-3 pt-3 border-t border-slate-200">
+          {/* 4. ABA POSIÇÃO (Fluxo vs Livre, Relative/Absolute/Fixed/Sticky, Z-Index) */}
+          <TabsContent value="position" className="m-0 space-y-4">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+              <Label className="text-xs font-bold text-slate-700 block">Modo de Layout</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={element.layoutMode !== 'free' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    onUpdateElement({
+                      ...element,
+                      layoutMode: 'flow',
+                    })
+                    updateStyle('position', undefined)
+                  }}
+                  className="text-xs"
+                >
+                  Modo Fluxo (Natural)
+                </Button>
+                <Button
+                  type="button"
+                  variant={element.layoutMode === 'free' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    onUpdateElement({
+                      ...element,
+                      layoutMode: 'free',
+                    })
+                    updateStyle('position', 'absolute')
+                  }}
+                  className="text-xs"
+                >
+                  Modo Livre (Manual)
+                </Button>
+              </div>
+              <p className="text-[10px] text-slate-500">
+                {element.layoutMode === 'free'
+                  ? 'Posicionamento livre com coordenadas X/Y no canvas.'
+                  : 'Modo padrão responsivo automático sem quebra de layout.'}
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-2">
               <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                <Move className="w-3 h-3" /> Posicionamento Profissional
+                <Move className="w-3 h-3" /> Posição CSS & Coordenadas
               </h4>
 
-              {/* Seletor de Position */}
               <div>
                 <Label className="text-xs">Posição (Position)</Label>
                 <Select
@@ -1001,7 +1346,6 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                 </Select>
               </div>
 
-              {/* Coordenadas Top / Right / Bottom / Left (visíveis especialmente se position != static) */}
               {currentStyles.position && currentStyles.position !== 'static' && (
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
                   <span className="text-[11px] font-semibold text-slate-700 block">
@@ -1036,7 +1380,6 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                 </div>
               )}
 
-              {/* Z-Index e Opacidade */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-xs flex items-center gap-1">
@@ -1056,7 +1399,7 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Opacidade (0 a 1)</Label>
+                  <Label className="text-xs">Opacidade</Label>
                   <Input
                     type="number"
                     step="0.1"
@@ -1075,7 +1418,6 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                 </div>
               </div>
 
-              {/* Overflow */}
               <div>
                 <Label className="text-xs">Controle de Transbordamento (Overflow)</Label>
                 <Select
@@ -1094,75 +1436,81 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                 </Select>
               </div>
             </div>
-
-            {/* 3.3 COLUNAS GRID */}
-            {(element.type === 'product_list' ||
-              element.type === 'grid' ||
-              element.type === 'columns') && (
-              <div className="space-y-3 pt-3 border-t border-slate-200">
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Colunas no Grid
-                </h4>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <Label className="text-[11px]">Desktop</Label>
-                    <Input
-                      type="number"
-                      value={currentStyles.gridColumnsDesktop || 4}
-                      onChange={(e) =>
-                        updateStyle('gridColumnsDesktop', parseInt(e.target.value, 10))
-                      }
-                      className="text-xs mt-1"
-                      min={1}
-                      max={6}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px]">Tablet</Label>
-                    <Input
-                      type="number"
-                      value={currentStyles.gridColumnsTablet || 2}
-                      onChange={(e) =>
-                        updateStyle('gridColumnsTablet', parseInt(e.target.value, 10))
-                      }
-                      className="text-xs mt-1"
-                      min={1}
-                      max={4}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px]">Mobile</Label>
-                    <Input
-                      type="number"
-                      value={currentStyles.gridColumnsMobile || 1}
-                      onChange={(e) =>
-                        updateStyle('gridColumnsMobile', parseInt(e.target.value, 10))
-                      }
-                      className="text-xs mt-1"
-                      min={1}
-                      max={2}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
           </TabsContent>
 
-          {/* 4. ABA RESPONSIVO */}
-          <TabsContent value="responsive" className="m-0 space-y-4">
-            <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-              <p className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-                <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
-                Modo Ativo: <span className="uppercase">{breakpoint}</span>
-              </p>
-              <p className="text-[11px] text-indigo-700 mt-0.5">
-                Alterações feitas nesta aba afetam especificamente a visualização em {breakpoint}.
-              </p>
-            </div>
+          {/* 5. ABA FILHOS (Para Containers / Hero / Section / Header / Footer) */}
+          {isParentContainer && (
+            <TabsContent value="children" className="m-0 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800">Elementos Filhos</h4>
+                  <p className="text-[10px] text-slate-400">
+                    Gerencie a árvore interna deste bloco
+                  </p>
+                </div>
+              </div>
 
+              {/* Lista dos filhos atuais */}
+              <div className="space-y-1.5">
+                {(element.children || []).map((childId, idx) => {
+                  const child = allElements[childId]
+                  if (!child) return null
+                  return (
+                    <div
+                      key={child.id}
+                      onClick={() => onSelectElement?.(child.id)}
+                      className="p-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-200 cursor-pointer flex items-center justify-between text-xs transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-400 font-mono">#{idx + 1}</span>
+                        <span className="font-semibold text-slate-800">
+                          {child.name || child.type}
+                        </span>
+                      </div>
+                      <span className="text-[9px] uppercase font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                        {child.type}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Botões Rápidos para Adicionar Filhos */}
+              <div className="pt-2 border-t border-slate-200 space-y-2">
+                <Label className="text-xs font-semibold text-slate-700 block">
+                  + Adicionar Elemento Dentro Deste Bloco
+                </Label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { type: 'heading', label: 'Título' },
+                    { type: 'text', label: 'Texto' },
+                    { type: 'image', label: 'Imagem' },
+                    { type: 'button', label: 'Botão' },
+                    { type: 'container', label: 'Subcontainer' },
+                    { type: 'flexbox', label: 'Flexbox' },
+                  ].map((it) => (
+                    <Button
+                      key={it.type}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onAddChildToElement?.(element.id, it.type)}
+                      className="text-xs justify-start h-7"
+                    >
+                      <Plus className="w-3 h-3 mr-1 text-indigo-600" />
+                      {it.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </TabsContent>
+          )}
+
+          {/* 6. ABA AVANÇADO (Visibilidade por Breakpoint e Custom Code) */}
+          <TabsContent value="advanced" className="m-0 space-y-4">
             <div className="space-y-3">
               <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Visibilidade do Elemento
+                Visibilidade por Dispositivo
               </h4>
               <div className="flex items-center justify-between">
                 <Label className="text-xs">Exibir no Desktop</Label>
@@ -1186,31 +1534,17 @@ export const ElementStylePanel: React.FC<ElementStylePanelProps> = ({
                 />
               </div>
             </div>
-          </TabsContent>
 
-          {/* 5. ABA AVANÇADO (HTML/CSS/Shortcode) */}
-          <TabsContent value="advanced" className="m-0 space-y-4">
-            {canCustomCode ? (
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-xs font-semibold text-slate-700">HTML Personalizado</Label>
-                  <textarea
-                    rows={5}
-                    value={element.content?.html || ''}
-                    onChange={(e) => updateContent('html', e.target.value)}
-                    placeholder="<div>Código customizado seguro...</div>"
-                    className="w-full text-xs font-mono p-2 rounded-md border border-slate-200 mt-1 bg-slate-900 text-emerald-400"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-center">
-                <Lock className="w-6 h-6 text-amber-600 mx-auto mb-2" />
-                <p className="text-xs font-bold text-amber-900">Custom Code Restrito</p>
-                <p className="text-[11px] text-amber-700 mt-1">
-                  A inserção de HTML/CSS arbitrário requer permissão administrativa{' '}
-                  <code className="font-mono">templates.custom_html</code>.
-                </p>
+            {canCustomCode && (
+              <div className="space-y-3 pt-3 border-t border-slate-200">
+                <Label className="text-xs font-semibold text-slate-700">HTML Personalizado</Label>
+                <textarea
+                  rows={4}
+                  value={element.content?.html || ''}
+                  onChange={(e) => updateContent('html', e.target.value)}
+                  placeholder="<div>Código customizado seguro...</div>"
+                  className="w-full text-xs font-mono p-2 rounded-md border border-slate-200 bg-slate-900 text-emerald-400"
+                />
               </div>
             )}
           </TabsContent>

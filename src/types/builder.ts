@@ -9,6 +9,7 @@ export type PageBuilderElementType =
   | 'columns'
   | 'grid'
   | 'flexbox'
+  | 'card'
   | 'heading'
   | 'text'
   | 'image'
@@ -24,6 +25,13 @@ export type PageBuilderElementType =
   | 'slider'
   | 'product_single'
   | 'product_list'
+  | 'product_card'
+  | 'product_image'
+  | 'product_badge'
+  | 'product_name'
+  | 'product_description'
+  | 'product_price'
+  | 'product_stock'
   | 'category_nav'
   | 'price_badge'
   | 'stock_badge'
@@ -126,11 +134,26 @@ export interface ResponsiveStyles {
   mobile?: ElementStyles
 }
 
+export interface PageSettings {
+  pagePaddingDesktop?: string
+  pagePaddingTablet?: string
+  pagePaddingMobile?: string
+  pageMaxWidth?: string
+  contentAlign?: 'left' | 'center' | 'right' | 'full'
+  backgroundColor?: string
+  backgroundImage?: string
+  fontFamily?: string
+  textColor?: string
+}
+
 export interface BuilderElement {
   id: string
   type: PageBuilderElementType
   name?: string
   locked?: boolean
+  canHaveChildren?: boolean
+  allowedChildren?: PageBuilderElementType[]
+  layoutMode?: 'flow' | 'free' // Modo de posicionamento: Fluxo normal ou Livre (coordenadas)
   styles?: ElementStyles
   responsiveStyles?: ResponsiveStyles
   content?: Record<string, any>
@@ -142,6 +165,7 @@ export interface PageLayoutData {
     id: 'root'
     type: 'page'
     styles?: ElementStyles
+    pageSettings?: PageSettings
     children: string[]
   }
   elements: Record<string, BuilderElement>

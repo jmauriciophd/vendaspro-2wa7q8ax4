@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import type { BuilderElement, Breakpoint } from '@/types/builder'
 import type { Product } from '@/types/crm'
 import {
@@ -7,13 +7,18 @@ import {
   User,
   Phone,
   ShieldCheck,
-  Package,
   Plus,
   Minus,
   Sparkles,
-  Search,
   CheckCircle2,
-  ExternalLink,
+  Play,
+  Copy,
+  Trash2,
+  ArrowUp,
+  Move,
+  Edit2,
+  Check,
+  ShoppingBag,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,10 +26,17 @@ import { Badge } from '@/components/ui/badge'
 interface RenderElementProps {
   element: BuilderElement
   allElements: Record<string, BuilderElement>
+  parentElement?: BuilderElement | null
   breakpoint?: Breakpoint
   isEditor?: boolean
   selectedId?: string | null
   onSelectElement?: (id: string) => void
+  onUpdateElement?: (updated: BuilderElement) => void
+  onDuplicateElement?: (id: string) => void
+  onDeleteElement?: (id: string) => void
+  onMoveUp?: (id: string) => void
+  onMoveDown?: (id: string) => void
+  onAddChild?: (parentId: string, type: string) => void
   products?: Product[]
   companyInfo?: any
   sellerInfo?: any
@@ -38,10 +50,17 @@ interface RenderElementProps {
 export const RenderElement: React.FC<RenderElementProps> = ({
   element,
   allElements,
+  parentElement,
   breakpoint = 'desktop',
   isEditor = false,
   selectedId,
   onSelectElement,
+  onUpdateElement,
+  onDuplicateElement,
+  onDeleteElement,
+  onMoveUp,
+  onMoveDown,
+  onAddChild,
   products = [],
   companyInfo,
   sellerInfo,
@@ -51,6 +70,10 @@ export const RenderElement: React.FC<RenderElementProps> = ({
   onOpenCart,
   onCheckoutClick,
 }) => {
+  // Estado local para edição inline de textos e títulos via duplo clique
+  const [isInlineEditing, setIsInlineEditing] = useState(false)
+  const [inlineTextValue, setInlineTextValue] = useState('')
+
   if (!element) return null
 
   // Combina estilos base com estilos responsivos do breakpoint ativo
@@ -83,7 +106,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
       .replace(
         /{{carrinho\.total}}/g,
         `R$ ${cartItems
-          .reduce((acc, it) => acc + it.product.price * it.quantity, 0)
+          .reduce((acc, it) => acc + (it.product.price || 0) * it.quantity, 0)
           .toFixed(2)
           .replace('.', ',')}`,
       )
@@ -139,7 +162,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     alignItems: styles.alignItems,
     flexWrap: styles.flexWrap,
     gap: styles.gap,
-    position: styles.position,
+    position: (styles.position as any) || (element.layoutMode === 'free' ? 'absolute' : undefined),
     top: styles.top,
     right: styles.right,
     bottom: styles.bottom,
@@ -151,7 +174,42 @@ export const RenderElement: React.FC<RenderElementProps> = ({
 
   // Renderiza filhos se houver
   const renderChildren = () => {
-    if (!element.children || element.children.length === 0) return null
+    if (!element.children || element.children.length === 0) {
+      if (
+        isEditor &&
+        (element.type === 'section' ||
+          element.type === 'container' ||
+          element.type === 'card' ||
+          element.type === 'flexbox' ||
+          element.type === 'grid' ||
+          element.type === 'columns')
+      ) {
+        return (
+          <div className="w-full p-4 border border-dashed border-indigo-300 rounded-lg bg-indigo-50/40 text-center flex flex-col items-center justify-center gap-1.5 my-1">
+            <p className="text-xs font-semibold text-indigo-900">
+              {element.name || element.type} (Vazio)
+            </p>
+            <p className="text-[10px] text-slate-500">
+              Arraste elementos para cá ou adicione novos filhos
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                onAddChild?.(element.id, 'text')
+              }}
+              className="h-6 text-[11px] bg-white text-indigo-600 hover:bg-indigo-50 border-indigo-200 mt-1"
+            >
+              <Plus className="w-3 h-3 mr-1" /> Adicionar Elemento
+            </Button>
+          </div>
+        )
+      }
+      return null
+    }
+
     return element.children.map((childId) => {
       const child = allElements[childId]
       if (!child) return null
@@ -160,10 +218,17 @@ export const RenderElement: React.FC<RenderElementProps> = ({
           key={child.id}
           element={child}
           allElements={allElements}
+          parentElement={element}
           breakpoint={breakpoint}
           isEditor={isEditor}
           selectedId={selectedId}
           onSelectElement={onSelectElement}
+          onUpdateElement={onUpdateElement}
+          onDuplicateElement={onDuplicateElement}
+          onDeleteElement={onDeleteElement}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          onAddChild={onAddChild}
           products={products}
           companyInfo={companyInfo}
           sellerInfo={sellerInfo}
@@ -177,7 +242,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     })
   }
 
-  // Container para manipulação visual de seleção no editor
+  // Wrapper contextual para edição, seleção, toolbar e badges no canvas
   const wrapEditor = (contentNode: React.ReactNode) => {
     if (!isEditor) return contentNode
     return (
@@ -188,14 +253,55 @@ export const RenderElement: React.FC<RenderElementProps> = ({
         }}
         className={`relative transition-all ${
           isSelected
-            ? 'ring-2 ring-indigo-600 ring-offset-2 z-20 shadow-sm'
+            ? 'outline-2 outline-indigo-600 outline-offset-1 z-20 shadow-xs'
             : 'hover:outline hover:outline-1 hover:outline-indigo-300'
         }`}
       >
+        {/* Toolbar Flutuante de Seleção */}
         {isSelected && (
-          <div className="absolute -top-6 left-0 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-t-md shadow flex items-center gap-1 z-30 pointer-events-none">
-            <span>{element.name || element.type}</span>
-            {element.locked && <span className="text-amber-300">🔒 Bloqueado</span>}
+          <div className="absolute -top-7 left-0 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-t-md shadow flex items-center gap-2 z-30">
+            <span className="uppercase tracking-wider">{element.name || element.type}</span>
+
+            {parentElement && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSelectElement?.(parentElement.id)
+                }}
+                className="hover:text-indigo-200 flex items-center gap-0.5 border-l border-indigo-400 pl-1.5"
+                title="Selecionar Pai"
+              >
+                <ArrowUp className="w-3 h-3" />
+                <span>Pai</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDuplicateElement?.(element.id)
+              }}
+              className="hover:text-indigo-200 border-l border-indigo-400 pl-1.5"
+              title="Duplicar"
+            >
+              <Copy className="w-3 h-3" />
+            </button>
+
+            {!element.locked && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDeleteElement?.(element.id)
+                }}
+                className="hover:text-rose-200 border-l border-indigo-400 pl-1.5"
+                title="Excluir"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            )}
           </div>
         )}
         {contentNode}
@@ -203,14 +309,14 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     )
   }
 
-  // 1. HEADER
+  // 1. HEADER (Desconstruído e editável)
   if (element.type === 'header') {
     const totalCartCount = cartItems.reduce((acc, it) => acc + it.quantity, 0)
     return wrapEditor(
       <header style={inlineStyles} className="w-full">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            {element.content?.showLogo && (
+            {element.content?.showLogo !== false && (
               <div className="flex items-center gap-2">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-md font-black text-lg">
                   <Store className="w-5 h-5" />
@@ -219,7 +325,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
                   <h1 className="text-base font-bold text-slate-900 leading-tight">
                     {companyInfo?.name || 'VendasPro Store'}
                   </h1>
-                  {element.content?.showCompanyInfo && companyInfo?.cnpj && (
+                  {element.content?.showCompanyInfo !== false && companyInfo?.cnpj && (
                     <p className="text-[11px] text-slate-400">CNPJ: {companyInfo.cnpj}</p>
                   )}
                 </div>
@@ -228,7 +334,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            {element.content?.showSellerBadge && sellerInfo && (
+            {element.content?.showSellerBadge !== false && sellerInfo && (
               <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs">
                 <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-[10px]">
                   <User className="w-3.5 h-3.5" />
@@ -240,7 +346,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
               </div>
             )}
 
-            {element.content?.showCartButton && (
+            {element.content?.showCartButton !== false && (
               <Button
                 type="button"
                 onClick={onOpenCart}
@@ -259,11 +365,12 @@ export const RenderElement: React.FC<RenderElementProps> = ({
             )}
           </div>
         </div>
+        {renderChildren()}
       </header>,
     )
   }
 
-  // 2. FOOTER
+  // 2. FOOTER (Editável)
   if (element.type === 'footer') {
     return wrapEditor(
       <footer style={inlineStyles} className="w-full">
@@ -273,7 +380,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
               <Store className="w-4 h-4 text-indigo-400" />
               {companyInfo?.name || 'VendasPro'}
             </p>
-            {element.content?.showCompanyLegal && (
+            {element.content?.showCompanyLegal !== false && (
               <p className="text-xs text-slate-400">
                 {companyInfo?.cnpj ? `CNPJ: ${companyInfo.cnpj} | ` : ''}
                 {companyInfo?.address
@@ -281,17 +388,20 @@ export const RenderElement: React.FC<RenderElementProps> = ({
                   : ''}
               </p>
             )}
-            <p className="text-[11px] text-slate-500">{element.content?.copyrightText}</p>
+            <p className="text-[11px] text-slate-500">
+              {element.content?.copyrightText ||
+                'Todos os direitos reservados. Faturamento e entrega sob regras comerciais.'}
+            </p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 text-xs">
-            {element.content?.showSellerContact && sellerInfo?.phone && (
+            {element.content?.showSellerContact !== false && sellerInfo?.phone && (
               <div className="flex items-center gap-1.5 text-slate-300">
                 <Phone className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Atendimento: {sellerInfo.phone}</span>
               </div>
             )}
-            {element.content?.showSecuritySeal && (
+            {element.content?.showSecuritySeal !== false && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-emerald-400">
                 <ShieldCheck className="w-4 h-4" />
                 <span className="font-semibold text-[11px]">Compra Segura & Mercado Pago</span>
@@ -299,14 +409,16 @@ export const RenderElement: React.FC<RenderElementProps> = ({
             )}
           </div>
         </div>
+        {renderChildren()}
       </footer>,
     )
   }
 
-  // 3. SECTIONS, CONTAINERS, COLUMNS, GRID, FLEXBOX
+  // 3. SECTIONS, CONTAINERS, CARD, COLUMNS, GRID, FLEXBOX
   if (
     element.type === 'section' ||
     element.type === 'container' ||
+    element.type === 'card' ||
     element.type === 'columns' ||
     element.type === 'grid' ||
     element.type === 'flexbox'
@@ -326,8 +438,17 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     )
   }
 
-  // 4. BANNER & HERO
+  // 4. BANNER & HERO (Seção composta com filhos ou renderização de fallback)
   if (element.type === 'banner' || element.type === 'hero') {
+    // Se tiver filhos, renderiza como container flexível
+    if (element.children && element.children.length > 0) {
+      return wrapEditor(
+        <div style={inlineStyles} className="w-full">
+          {renderChildren()}
+        </div>,
+      )
+    }
+
     return wrapEditor(
       <div style={inlineStyles}>
         {element.content?.badge && (
@@ -378,28 +499,105 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     )
   }
 
-  // 5. HEADING & TEXT
+  // 5. HEADING & TEXT (Com suporte a edição inline com duplo clique)
   if (element.type === 'heading') {
     const tag = element.content?.tag || 'h2'
+    const textVal = element.content?.text || 'Título'
+
+    if (isInlineEditing && isEditor) {
+      return wrapEditor(
+        <input
+          autoFocus
+          value={inlineTextValue}
+          onChange={(e) => setInlineTextValue(e.target.value)}
+          onBlur={() => {
+            setIsInlineEditing(false)
+            onUpdateElement?.({
+              ...element,
+              content: { ...(element.content || {}), text: inlineTextValue },
+            })
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              setIsInlineEditing(false)
+              onUpdateElement?.({
+                ...element,
+                content: { ...(element.content || {}), text: inlineTextValue },
+              })
+            }
+          }}
+          className="w-full bg-white border border-indigo-500 rounded px-2 py-1 text-slate-900"
+          style={inlineStyles}
+        />,
+      )
+    }
+
+    const headingContent = replaceShortcodes(textVal)
+    const handleDoubleClick = (e: React.MouseEvent) => {
+      if (isEditor) {
+        e.stopPropagation()
+        setInlineTextValue(textVal)
+        setIsInlineEditing(true)
+      }
+    }
+
     if (tag === 'h1') {
       return wrapEditor(
-        <h1 style={inlineStyles}>{replaceShortcodes(element.content?.text || 'Título')}</h1>,
+        <h1 style={inlineStyles} onDoubleClick={handleDoubleClick}>
+          {headingContent}
+        </h1>,
       )
     }
     if (tag === 'h3') {
       return wrapEditor(
-        <h3 style={inlineStyles}>{replaceShortcodes(element.content?.text || 'Título')}</h3>,
+        <h3 style={inlineStyles} onDoubleClick={handleDoubleClick}>
+          {headingContent}
+        </h3>,
       )
     }
     return wrapEditor(
-      <h2 style={inlineStyles}>{replaceShortcodes(element.content?.text || 'Título')}</h2>,
+      <h2 style={inlineStyles} onDoubleClick={handleDoubleClick}>
+        {headingContent}
+      </h2>,
     )
   }
 
   if (element.type === 'text') {
+    const textVal = element.content?.text || ''
+
+    if (isInlineEditing && isEditor) {
+      return wrapEditor(
+        <textarea
+          autoFocus
+          rows={3}
+          value={inlineTextValue}
+          onChange={(e) => setInlineTextValue(e.target.value)}
+          onBlur={() => {
+            setIsInlineEditing(false)
+            onUpdateElement?.({
+              ...element,
+              content: { ...(element.content || {}), text: inlineTextValue },
+            })
+          }}
+          className="w-full bg-white border border-indigo-500 rounded p-2 text-xs text-slate-900"
+          style={inlineStyles}
+        />,
+      )
+    }
+
     return wrapEditor(
-      <div style={inlineStyles} className="whitespace-pre-wrap">
-        {replaceShortcodes(element.content?.text || '')}
+      <div
+        style={inlineStyles}
+        className="whitespace-pre-wrap"
+        onDoubleClick={(e) => {
+          if (isEditor) {
+            e.stopPropagation()
+            setInlineTextValue(textVal)
+            setIsInlineEditing(true)
+          }
+        }}
+      >
+        {replaceShortcodes(textVal)}
       </div>,
     )
   }
@@ -417,7 +615,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     )
   }
 
-  // 7. IMAGE & VIDEO
+  // 7. IMAGE
   if (element.type === 'image') {
     return wrapEditor(
       <div className="overflow-hidden" style={inlineStyles}>
@@ -431,15 +629,44 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     )
   }
 
+  // 8. VÍDEO (Neutro e totalmente configurável, sem demo fixo inadequado)
   if (element.type === 'video') {
+    const videoUrl = element.content?.url || ''
+
+    if (!videoUrl) {
+      return wrapEditor(
+        <div
+          style={inlineStyles}
+          className="bg-slate-900 text-slate-400 p-8 flex flex-col items-center justify-center text-center aspect-video rounded-xl"
+        >
+          <Play className="w-10 h-10 text-indigo-400 mb-2 opacity-80" />
+          <p className="text-xs font-bold text-white">Vídeo Promocional</p>
+          <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
+            {isEditor
+              ? 'Selecione este componente e informe a URL do vídeo (YouTube/Vimeo) no painel de propriedades.'
+              : 'Nenhum vídeo configurado.'}
+          </p>
+        </div>,
+      )
+    }
+
+    let embedUrl = videoUrl
+    if (videoUrl.includes('youtube.com/watch?v=')) {
+      embedUrl = videoUrl.replace('watch?v=', 'embed/')
+    } else if (videoUrl.includes('youtu.be/')) {
+      embedUrl = videoUrl.replace('youtu.be/', 'www.youtube.com/embed/')
+    } else if (videoUrl.includes('vimeo.com/') && !videoUrl.includes('player.vimeo.com')) {
+      embedUrl = videoUrl.replace('vimeo.com/', 'player.vimeo.com/video/')
+    }
+
     return wrapEditor(
       <div
         style={inlineStyles}
-        className="overflow-hidden bg-slate-900 flex items-center justify-center"
+        className="overflow-hidden bg-slate-900 flex items-center justify-center rounded-xl aspect-video"
       >
         <iframe
-          src={element.content?.url?.replace('watch?v=', 'embed/') || ''}
-          title="Vídeo Promocional"
+          src={embedUrl}
+          title="Vídeo do Catálogo"
           className="w-full h-full border-0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
@@ -448,12 +675,23 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     )
   }
 
-  // 8. BUTTON & CTA
+  // 9. BUTTON & CTA
   if (element.type === 'button') {
+    const btnText = element.content?.text || 'Clique Aqui'
     return wrapEditor(
-      <a href={element.content?.link || '#'} style={inlineStyles}>
-        {replaceShortcodes(element.content?.text || 'Clique Aqui')}
-      </a>,
+      <button
+        type="button"
+        onClick={() => {
+          if (!isEditor) {
+            if (element.content?.actionType === 'open_cart') onOpenCart?.()
+            else if (element.content?.actionType === 'open_checkout') onCheckoutClick?.()
+          }
+        }}
+        style={inlineStyles}
+        className="cursor-pointer"
+      >
+        {replaceShortcodes(btnText)}
+      </button>,
     )
   }
 
@@ -479,56 +717,29 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     )
   }
 
-  // 9. PRODUCT LIST (Catálogo Real com Estoque e Preço do CRM)
+  // 10. PRODUCT LIST (Catálogo Real com Produtos do CRM)
   if (element.type === 'product_list') {
     const dCols = styles.gridColumnsDesktop || 4
     const tCols = styles.gridColumnsTablet || 2
     const mCols = styles.gridColumnsMobile || 1
-    const displayProducts =
-      products.length > 0
-        ? products
-        : ([
-            {
-              id: 'mock-1',
-              name: 'Produto Exemplo A',
-              price: 89.9,
-              unit: 'cx',
-              code: 'PRD-01',
-              stock: 50,
-              active: true,
-              category: 'Geral',
-            },
-            {
-              id: 'mock-2',
-              name: 'Produto Exemplo B',
-              price: 145.0,
-              unit: 'un',
-              code: 'PRD-02',
-              stock: 12,
-              active: true,
-              category: 'Geral',
-            },
-            {
-              id: 'mock-3',
-              name: 'Produto Exemplo C',
-              price: 29.9,
-              unit: 'kg',
-              code: 'PRD-03',
-              stock: 150,
-              active: true,
-              category: 'Alimentos',
-            },
-            {
-              id: 'mock-4',
-              name: 'Produto Exemplo D',
-              price: 220.0,
-              unit: 'fd',
-              code: 'PRD-04',
-              stock: 5,
-              active: true,
-              category: 'Bebidas',
-            },
-          ] as unknown as Product[])
+    const displayProducts = products.length > 0 ? products : []
+
+    if (displayProducts.length === 0) {
+      return wrapEditor(
+        <div
+          style={inlineStyles}
+          className="w-full p-8 text-center bg-slate-50 border border-slate-200 rounded-2xl"
+        >
+          <ShoppingBag className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+          <h3 className="text-sm font-bold text-slate-700">
+            Nenhum produto cadastrado no catálogo
+          </h3>
+          <p className="text-xs text-slate-400 mt-1">
+            Cadastre produtos reais no módulo de Produtos para exibi-los nesta grade.
+          </p>
+        </div>,
+      )
+    }
 
     return wrapEditor(
       <div style={inlineStyles} id="produtos" className="w-full">
@@ -554,7 +765,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       loading="lazy"
                     />
-                    {element.content?.showStockBadge && (
+                    {element.content?.showStockBadge !== false && (
                       <div className="absolute top-2.5 right-2.5">
                         {isOutOfStock ? (
                           <Badge variant="destructive" className="text-[10px] font-bold">
@@ -567,7 +778,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
                         )}
                       </div>
                     )}
-                    {p.code && element.content?.showSku && (
+                    {p.code && element.content?.showSku !== false && (
                       <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-slate-900/70 text-white text-[9px] font-mono">
                         Cód: {p.code}
                       </span>
@@ -582,7 +793,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
                       Unidade: {p.unit || 'unidade'}
                     </p>
 
-                    {element.content?.showPrice && (
+                    {element.content?.showPrice !== false && (
                       <div className="mt-3">
                         <span className="text-[10px] text-slate-400 block font-semibold">
                           Preço Unitário
@@ -601,7 +812,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
                 </div>
 
                 <div className="p-4 pt-0">
-                  {element.content?.showBuyButton && (
+                  {element.content?.showBuyButton !== false && (
                     <div className="flex items-center gap-2">
                       {qty > 0 ? (
                         <div className="flex items-center justify-between w-full bg-indigo-50 border border-indigo-200 rounded-xl p-1">
@@ -646,27 +857,41 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     )
   }
 
-  // 10. PRODUCT SINGLE (Produto Único / Landing Page)
+  // 11. PRODUCT SINGLE (Produto em Destaque — Decomposto em subcomponentes ou filhos)
   if (element.type === 'product_single') {
-    const singleProduct = (products.find((p) => p.id === element.content?.productId) ||
-      products[0] || {
-        id: 'mock-single',
-        name: 'Produto Especial Destaque',
-        price: 199.9,
-        unit: 'cx',
-        code: 'PRD-SINGLE',
-        stock: 35,
-        active: true,
-        category: 'Premium',
-      }) as unknown as Product
+    const selectedProd = products.find((p) => p.id === element.content?.productId) || products[0]
+
+    if (!selectedProd) {
+      return wrapEditor(
+        <div
+          style={inlineStyles}
+          className="w-full p-8 text-center bg-slate-50 border border-slate-200 rounded-2xl"
+        >
+          <ShoppingBag className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+          <p className="text-xs font-bold text-slate-700">Nenhum produto real selecionado</p>
+          <p className="text-[10px] text-slate-400 mt-1">
+            Selecione um produto do cadastro no painel de propriedades.
+          </p>
+        </div>,
+      )
+    }
+
+    // Se tiver filhos configurados na subárvore, renderiza a árvore de filhos
+    if (element.children && element.children.length > 0) {
+      return wrapEditor(
+        <div style={inlineStyles} className="w-full">
+          {renderChildren()}
+        </div>,
+      )
+    }
 
     return wrapEditor(
       <div style={inlineStyles} className="w-full">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
           <div className="aspect-square rounded-2xl overflow-hidden bg-slate-100 relative shadow-md">
             <img
-              src={`https://img.usecurling.com/p/600/600?q=${encodeURIComponent(singleProduct.name || 'product')}`}
-              alt={singleProduct.name}
+              src={`https://img.usecurling.com/p/600/600?q=${encodeURIComponent(selectedProd.name || 'product')}`}
+              alt={selectedProd.name}
               className="w-full h-full object-cover"
               loading="lazy"
             />
@@ -678,16 +903,16 @@ export const RenderElement: React.FC<RenderElementProps> = ({
           <div className="space-y-4">
             <div className="space-y-1">
               <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
-                Código: {singleProduct.code || 'SKU'}
+                Código: {selectedProd.code || 'SKU'}
               </span>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                {singleProduct.name}
+                {selectedProd.name}
               </h2>
               <p className="text-xs text-slate-400">
                 Unidade de medida:{' '}
-                <strong className="text-slate-600">{singleProduct.unit || 'unidade'}</strong> |
+                <strong className="text-slate-600">{selectedProd.unit || 'unidade'}</strong> |
                 Estoque atual:{' '}
-                <strong className="text-emerald-600">{singleProduct.stock} disponíveis</strong>
+                <strong className="text-emerald-600">{selectedProd.stock || 0} disponíveis</strong>
               </p>
             </div>
 
@@ -696,7 +921,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
               <div className="flex items-baseline gap-1 mt-0.5">
                 <span className="text-base font-bold text-indigo-600">R$</span>
                 <span className="text-3xl font-black text-slate-900">
-                  {Number(singleProduct.price || 0)
+                  {Number(selectedProd.price || 0)
                     .toFixed(2)
                     .replace('.', ',')}
                 </span>
@@ -705,7 +930,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
 
             <Button
               type="button"
-              onClick={() => onAddToCart?.(singleProduct, 1)}
+              onClick={() => onAddToCart?.(selectedProd, 1)}
               className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm px-8 py-3 rounded-xl shadow-md flex items-center justify-center gap-2"
             >
               <ShoppingCart className="w-4 h-4" />
@@ -717,7 +942,91 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     )
   }
 
-  // 11. CHECKOUT BLOCK
+  // 12. SUBCOMPONENTES DE PRODUTO (product_name, product_price, product_stock, product_image, product_card)
+  if (element.type === 'product_card') {
+    return wrapEditor(
+      <div style={inlineStyles} className="w-full flex flex-col justify-between">
+        {renderChildren()}
+      </div>,
+    )
+  }
+
+  if (element.type === 'product_name') {
+    const text =
+      element.content?.useDynamic === false
+        ? element.content?.customText || 'Nome do Produto'
+        : products[0]?.name || 'Nome do Produto Dinâmico'
+    return wrapEditor(<h3 style={inlineStyles}>{replaceShortcodes(text)}</h3>)
+  }
+
+  if (element.type === 'product_price') {
+    const priceVal = products[0]?.price || 0
+    return wrapEditor(
+      <div style={inlineStyles}>
+        {element.content?.labelPrefix && (
+          <span className="text-xs text-slate-400 block">{element.content.labelPrefix}</span>
+        )}
+        <span className="text-xs font-bold mr-1">R$</span>
+        <span>{Number(priceVal).toFixed(2).replace('.', ',')}</span>
+      </div>,
+    )
+  }
+
+  if (element.type === 'product_image') {
+    const src =
+      element.content?.useDynamic === false
+        ? element.content?.customSrc || 'https://img.usecurling.com/p/400/400?q=product'
+        : `https://img.usecurling.com/p/400/400?q=${encodeURIComponent(products[0]?.name || 'product')}`
+    return wrapEditor(
+      <div style={inlineStyles} className="overflow-hidden">
+        <img src={src} alt="Produto" className="w-full h-full object-cover" />
+      </div>,
+    )
+  }
+
+  // 13. CART SUMMARY (Isolado e sem vídeo indesejado)
+  if (element.type === 'cart_summary') {
+    const totalCart = cartItems.reduce((acc, it) => acc + (it.product.price || 0) * it.quantity, 0)
+    return wrapEditor(
+      <div style={inlineStyles} className="w-full">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <ShoppingCart className="w-4 h-4 text-indigo-600" />
+            {element.content?.title || 'Resumo do Pedido'}
+          </h3>
+          <Badge variant="outline" className="text-xs">
+            {cartItems.length} {cartItems.length === 1 ? 'item' : 'itens'}
+          </Badge>
+        </div>
+
+        {cartItems.length === 0 ? (
+          <div className="py-6 text-center text-slate-400">
+            <p className="text-xs">Nenhum produto adicionado ao pedido ainda.</p>
+          </div>
+        ) : (
+          <div className="py-3 space-y-2">
+            {cartItems.map((it) => (
+              <div key={it.product.id} className="flex items-center justify-between text-xs">
+                <span className="text-slate-700 font-medium truncate max-w-[200px]">
+                  {it.quantity}x {it.product.name}
+                </span>
+                <span className="font-bold text-slate-900">
+                  R$ {((it.product.price || 0) * it.quantity).toFixed(2).replace('.', ',')}
+                </span>
+              </div>
+            ))}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between font-bold text-sm text-slate-900">
+              <span>Total:</span>
+              <span className="text-indigo-600">R$ {totalCart.toFixed(2).replace('.', ',')}</span>
+            </div>
+          </div>
+        )}
+        {renderChildren()}
+      </div>,
+    )
+  }
+
+  // 14. CHECKOUT BLOCK
   if (element.type === 'checkout_block') {
     return wrapEditor(
       <div style={inlineStyles} className="w-full text-center">
@@ -743,7 +1052,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     )
   }
 
-  // 12. CUSTOM HTML (Sanitizado)
+  // 15. CUSTOM HTML
   if (element.type === 'custom_html') {
     return wrapEditor(
       <div
@@ -753,7 +1062,7 @@ export const RenderElement: React.FC<RenderElementProps> = ({
     )
   }
 
-  // Fallback genérico
+  // Fallback padrão com renderização de filhos
   return wrapEditor(
     <div style={inlineStyles} className="p-3 border border-dashed border-slate-300 rounded-lg">
       <p className="text-xs text-slate-500 font-semibold">{element.name || element.type}</p>
