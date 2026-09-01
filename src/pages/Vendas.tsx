@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { CancelSaleModal } from '@/components/CancelSaleModal'
 import {
   ShoppingCart,
   Plus,
@@ -17,7 +18,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { saleService, customerService, userService, productService } from '@/services/crm'
-import { paymentService } from '@/services/paymentService'
+import { paymentService, formatPaymentMethod } from '@/services/paymentService'
 import type { Sale, Customer, User, Product } from '@/types/crm'
 import { NewSaleModal } from '@/components/NewSaleModal'
 import { ViewSaleModal } from '@/components/ViewSaleModal'
@@ -181,23 +182,28 @@ export default function Vendas() {
     return visibleSales.reduce((acc, curr) => acc + (curr.total || 0), 0)
   }, [visibleSales])
 
-  const handleDeleteSale = async (saleId: string) => {
-    if (!confirm('Deseja realmente excluir este registro de venda?')) return
-    try {
-      await saleService.delete(saleId)
-      toast.success('Venda excluída com sucesso')
-      loadData()
-    } catch (e) {
-      toast.error('Erro ao excluir venda')
-    }
+  const [cancelModalOpen, setCancelModalOpen] = useState(false)
+  const [saleToCancel, setSaleToCancel] = useState<Sale | null>(null)
+  const [canceling, setCanceling] = useState(false)
+
+  const handleOpenCancelModal = (sale: Sale) => {
+    setSaleToCancel(sale)
+    setCancelModalOpen(true)
   }
 
-  const paymentMethodLabel: any = {
-    dinheiro: 'Dinheiro',
-    pix: 'PIX',
-    cartao_credito: 'Cartão de Crédito',
-    cartao_debito: 'Cartão de Débito',
-    boleto: 'Boleto Bancário',
+  const handleConfirmCancel = async () => {
+    if (!saleToCancel) return
+    setCanceling(true)
+    try {
+      await saleService.delete(saleToCancel.id)
+      toast.success('Venda cancelada com sucesso')
+      loadData()
+    } catch (e) {
+      toast.error('Erro ao cancelar venda')
+    } finally {
+      setCanceling(false)
+      setSaleToCancel(null)
+    }
   }
 
   return (
@@ -362,7 +368,7 @@ export default function Vendas() {
                       {s.expand?.seller?.name || 'Vendedor'}
                     </td>
                     <td className="py-3.5 px-4 text-slate-600">
-                      {paymentMethodLabel[s.payment_method] || s.payment_method}
+                      {formatPaymentMethod(s.payment_method)}
                     </td>
                     <td className="py-3.5 px-4">
                       {(() => {
@@ -439,8 +445,8 @@ export default function Vendas() {
                           <Eye className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDeleteSale(s.id)}
-                          title="Excluir venda"
+                          onClick={() => handleOpenCancelModal(s)}
+                          title="Cancelar operação de venda"
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -471,6 +477,22 @@ export default function Vendas() {
         isOpen={Boolean(viewSaleId)}
         onClose={() => setViewSaleId(null)}
         saleId={viewSaleId}
+      />
+
+      {/* Cancel Sale Confirmation Modal */}
+      <CancelSaleModal
+        isOpen={cancelModalOpen}
+        onClose={() => {
+          setCancelModalOpen(false)
+          setSaleToCancel(null)
+        }}
+        onConfirm={handleConfirmCancel}
+        hasActiveCharge={Boolean(
+          saleToCancel &&
+          chargeStatusBySale[saleToCancel.id] &&
+          chargeStatusBySale[saleToCancel.id].label === 'Aguardando pagamento',
+        )}
+        loading={canceling}
       />
     </div>
   )

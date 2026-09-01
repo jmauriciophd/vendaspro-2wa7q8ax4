@@ -31,7 +31,7 @@ import {
   type PromissoriaInstallment,
 } from '@/lib/documents'
 import { GenerateChargeModal } from '@/components/payments/GenerateChargeModal'
-import { paymentService } from '@/services/paymentService'
+import { paymentService, formatPaymentMethod, formatChargeStatus } from '@/services/paymentService'
 import type { PaymentChargeListItem } from '@/types/payments'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
@@ -40,14 +40,6 @@ interface ViewSaleModalProps {
   isOpen: boolean
   onClose: () => void
   saleId: string | null
-}
-
-const paymentMethodLabel: any = {
-  dinheiro: 'Dinheiro',
-  pix: 'PIX',
-  cartao_credito: 'Cartão de Crédito',
-  cartao_debito: 'Cartão de Débito',
-  boleto: 'Boleto Bancário',
 }
 
 type DocTab = 'nfe' | 'promissoria'
@@ -198,7 +190,7 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
       `Cliente: ${customer?.name || '-'}`,
       `Data: ${new Date(sale.sale_date || sale.created).toLocaleDateString('pt-BR')}`,
       `Valor Total: R$ ${formatMoney(total)}`,
-      `Forma de Pagamento: ${paymentMethodLabel[sale.payment_method] || sale.payment_method}`,
+      `Forma de Pagamento: ${formatPaymentMethod(sale.payment_method)}`,
       `Status: ${sale.payment_status === 'pago' ? 'Pago' : 'Pendente'}`,
       ``,
       `Itens:`,
@@ -431,7 +423,7 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                 <div>
                   <span className="text-slate-400 text-[11px] block">Forma de Pagamento:</span>
                   <span className="font-semibold text-slate-800">
-                    {paymentMethodLabel[sale.payment_method] || sale.payment_method}
+                    {formatPaymentMethod(sale.payment_method)}
                   </span>
                 </div>
                 <div>

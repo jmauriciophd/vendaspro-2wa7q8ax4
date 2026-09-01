@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-01T18:49:44.033Z",
+  "generatedAt": "2026-09-01T20:11:14.870Z",
   "collections": [
     {
       "name": "users",
@@ -60,6 +60,12 @@
         {
           "name": "is_super_admin",
           "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "phone",
+          "type": "text",
           "required": false,
           "system": false
         }

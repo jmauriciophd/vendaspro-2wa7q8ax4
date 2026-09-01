@@ -16,7 +16,10 @@ import {
   paymentService,
   formatMoney,
   formatDate,
+  chargeStatusLabels,
+  formatChargeStatus,
   paymentMethodLabels,
+  formatPaymentMethod,
   paymentMethodBadge,
 } from '@/services/paymentService'
 import type { PaymentChargeListItem, ChargeStatus, PaymentMethod } from '@/types/payments'
@@ -231,10 +234,10 @@ export default function PaymentCharges() {
             onChange={(e) => setFStatus(e.target.value)}
             className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-indigo-600"
           >
-            <option value="">Todos os status</option>
+            <option value="">Todos os status de cobrança</option>
             {statusList.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {formatChargeStatus(s)}
               </option>
             ))}
           </select>
@@ -243,10 +246,10 @@ export default function PaymentCharges() {
             onChange={(e) => setFMethod(e.target.value)}
             className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-indigo-600"
           >
-            <option value="">Todos os métodos</option>
+            <option value="">Todos os métodos de pagamento</option>
             {methodList.map((m) => (
               <option key={m} value={m}>
-                {m}
+                {formatPaymentMethod(m)}
               </option>
             ))}
           </select>
@@ -380,7 +383,7 @@ export default function PaymentCharges() {
                           'bg-slate-50 text-slate-700 border-slate-200'
                         }`}
                       >
-                        {paymentMethodLabels[c.payment_method] || c.payment_method}
+                        {formatPaymentMethod(c.payment_method)}
                       </span>
                     </td>{' '}
                     <td className="py-3 px-4 text-right font-bold text-slate-900">
@@ -418,19 +421,6 @@ function StatusBadge({
   expiresAt?: string | null
   paidAt?: string | null
 }) {
-  const labels: Record<string, string> = {
-    pending: 'Pendente',
-    waiting_payment: 'Aguardando',
-    paid: 'Pago',
-    expired: 'Vencida',
-    canceled: 'Cancelada',
-    refunded: 'Reembolsada',
-    partially_refunded: 'Reemb. parcial',
-    failed: 'Falhou',
-    under_review: 'Em análise',
-    difference: 'Divergente',
-    partial: 'Parcial',
-  }
   const colors: Record<string, string> = {
     pending: 'bg-slate-50 text-slate-700 border-slate-200',
     waiting_payment: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -504,12 +494,12 @@ function StatusBadge({
 
   return (
     <span
-      title={tooltips[status] || status}
+      title={tooltips[status] || formatChargeStatus(status)}
       className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-help ${
         colors[status] || 'bg-slate-50 text-slate-700 border-slate-200'
       }`}
     >
-      {labels[status] || status}
+      {formatChargeStatus(status)}
     </span>
   )
 }

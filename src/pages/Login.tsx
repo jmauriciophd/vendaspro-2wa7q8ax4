@@ -13,6 +13,7 @@ import {
   ShoppingCart,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { PasswordInput } from '@/components/ui/PasswordInput'
 
 export default function Login() {
   const { login } = useAuth()
@@ -173,26 +174,17 @@ export default function Login() {
                 {isResetting ? 'Enviando...' : 'Esqueceu sua senha?'}
               </button>
             </div>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <Lock className="w-4 h-4" />
-              </div>
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value)
-                  if (errors.password) setErrors((prev) => ({ ...prev, password: '' }))
-                }}
-                placeholder="••••••••"
-                className={`w-full pl-10 pr-4 py-2.5 bg-white text-sm text-slate-900 border rounded-xl outline-none transition-all ${
-                  errors.password
-                    ? 'border-red-500 focus:ring-2 focus:ring-red-200'
-                    : 'border-slate-200 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100'
-                }`}
-              />
-            </div>
+            <PasswordInput
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                if (errors.password) setErrors((prev) => ({ ...prev, password: '' }))
+              }}
+              placeholder="••••••••"
+              iconLeft={<Lock className="w-4 h-4" />}
+              error={Boolean(errors.password)}
+            />
             {errors.password && (
               <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />

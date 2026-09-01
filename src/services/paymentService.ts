@@ -201,18 +201,38 @@ export const paymentService = {
 
 // ----- helpers de formatação/presentação (compartilhados entre páginas) -----
 
+/**
+ * Camada Central de Labels para Status de Cobrança / Pagamento
+ * Mantém os valores técnicos no banco de dados e padroniza a exibição amigável em pt-BR.
+ */
 export const chargeStatusLabels: Record<string, string> = {
   pending: 'Pendente',
   waiting_payment: 'Aguardando pagamento',
   paid: 'Pago',
-  expired: 'Vencida',
-  canceled: 'Cancelada',
-  refunded: 'Reembolsada',
-  partially_refunded: 'Reembolso parcial',
-  failed: 'Falhou',
+  expired: 'Expirado',
+  canceled: 'Cancelado',
+  difference: 'Divergência',
   under_review: 'Em análise',
-  difference: 'Divergente',
-  partial: 'Parcial',
+  partial: 'Pagamento parcial',
+  processing: 'Processando',
+  approved: 'Aprovado',
+  rejected: 'Recusado',
+  refunded: 'Estornado',
+  partially_refunded: 'Estorno parcial',
+  failed: 'Falhou',
+  in_mediation: 'Em mediação',
+  charged_back: 'Chargeback',
+  cancelled: 'Cancelado',
+}
+
+/**
+ * Função utilitária segura para formatar status desconhecido em Title Case sem quebrar a tela.
+ */
+export function formatChargeStatus(status?: string | null): string {
+  if (!status) return '—'
+  if (chargeStatusLabels[status]) return chargeStatusLabels[status]
+  // Fallback seguro em Title Case (ex: "new_status" -> "New Status")
+  return status.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 export const chargeStatusBadge: Record<string, string> = {
@@ -227,14 +247,37 @@ export const chargeStatusBadge: Record<string, string> = {
   under_review: 'bg-sky-50 text-sky-700 border-sky-200',
   difference: 'bg-orange-50 text-orange-700 border-orange-200',
   partial: 'bg-amber-50 text-amber-700 border-amber-200',
+  processing: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  rejected: 'bg-red-50 text-red-700 border-red-200',
 }
 
+/**
+ * Camada Central de Labels para Métodos de Pagamento / Cobrança
+ */
 export const paymentMethodLabels: Record<string, string> = {
   pix: 'PIX',
-  credit_card: 'Cartão de Crédito',
-  debit_card: 'Cartão de Débito',
+  credit_card: 'Cartão de crédito',
+  debit_card: 'Cartão de débito',
   boleto: 'Boleto',
-  link: 'Link de Pagamento',
+  link: 'Link de pagamento',
+  dinheiro: 'Dinheiro',
+  cash: 'Dinheiro',
+  cartao_credito: 'Cartão de crédito',
+  cartao_debito: 'Cartão de débito',
+  bank_transfer: 'Transferência bancária',
+  wallet: 'Carteira digital',
+  deposit: 'Depósito',
+  other: 'Outro',
+}
+
+/**
+ * Função utilitária segura para formatar método de pagamento desconhecido.
+ */
+export function formatPaymentMethod(method?: string | null): string {
+  if (!method) return '—'
+  if (paymentMethodLabels[method]) return paymentMethodLabels[method]
+  return method.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 export const paymentMethodBadge: Record<string, string> = {
@@ -243,6 +286,10 @@ export const paymentMethodBadge: Record<string, string> = {
   debit_card: 'bg-blue-50 text-blue-700 border-blue-200',
   boleto: 'bg-amber-50 text-amber-700 border-amber-200',
   link: 'bg-violet-50 text-violet-700 border-violet-200',
+  dinheiro: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  cash: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  cartao_credito: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  cartao_debito: 'bg-blue-50 text-blue-700 border-blue-200',
 }
 
 export const auditActionLabels: Record<string, string> = {
