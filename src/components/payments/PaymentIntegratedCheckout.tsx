@@ -137,13 +137,15 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
     }
   }, [charge.provider_public_key])
 
-  // Inicializa Card Payment Brick UMA ÚNICA VEZ e com proteção contra loop
+  // Inicializa Card Payment Brick UMA ÚNICA VEZ e com proteção total contra loops
   useEffect(() => {
     const publicKey = charge.provider_public_key
     if (!sdkLoaded || !publicKey || !window.MercadoPago || !brickContainerRef.current) return
     if (brickRendered || brickAttemptedRef.current) return
 
     brickAttemptedRef.current = true
+
+    let brickController: any = null
 
     try {
       const mp = new window.MercadoPago(publicKey, {
@@ -202,7 +204,7 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
             },
             onError: (error: any) => {
               console.warn(
-                'Mercado Pago Brick indisponível (usando checkout direto nativo):',
+                'Mercado Pago Brick indisponível (usando formulário nativo embutido):',
                 error,
               )
               // Em caso de erro na inicialização do Bricks (ex: 404 em payment_methods/search),
@@ -215,7 +217,7 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
         if (brickContainerRef.current) {
           brickContainerRef.current.innerHTML = ''
           try {
-            await bricksBuilderInstance.create(
+            brickController = await bricksBuilderInstance.create(
               'cardPayment',
               'cardPaymentBrick_container',
               settings,
@@ -235,7 +237,17 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
       console.warn('Erro ao configurar instância do Mercado Pago:', e)
       setBrickRendered(false)
     }
-  }, [sdkLoaded, charge, brickRendered, onPaymentSuccess])
+
+    return () => {
+      try {
+        if (brickController && typeof brickController.unmount === 'function') {
+          brickController.unmount()
+        }
+      } catch {
+        /* intentionally ignored */
+      }
+    }
+  }, [sdkLoaded, charge.id, charge.final_amount, charge.installments, charge.provider_public_key])
 
   // Submissão do Formulário Integrado Nativo
   const handleNativeSubmit = async (e: React.FormEvent) => {

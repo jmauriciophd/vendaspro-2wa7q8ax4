@@ -89,6 +89,10 @@ export const paymentService = {
     return await pb.send(`${BASE}/charges`, { method: 'GET', query })
   },
 
+  async listChargesBySale(saleId: string): Promise<PaymentChargeListItem[]> {
+    return this.listCharges({ sale_id: saleId })
+  },
+
   async getCharge(id: string): Promise<PaymentChargeDetail> {
     return await pb.send(`${BASE}/charges/${id}`, { method: 'GET' })
   },

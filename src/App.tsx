@@ -142,6 +142,7 @@ const App = () => (
           <Route path="/catalogo/:slug" element={<PublicCatalogView />} />
           <Route path="/pagar/:id" element={<PaymentChargeDetail />} />
           <Route path="/cobranca/:id" element={<PaymentChargeDetail />} />
+          <Route path="/financeiro/cobrancas/:id" element={<PaymentChargeDetail />} />
 
           {/* Rota Tela Cheia do Page Builder */}
           <Route path="/pages/builder/:pageId" element={<PageBuilder />} />
@@ -154,7 +155,6 @@ const App = () => (
             <Route path="/seller-catalogs" element={<SellerCatalogs />} />
             <Route path="/pages" element={<SalePagesList />} />
             <Route path="/templates" element={<TemplatesList />} />
-            <Route path="/meu-dashboard" element={<SellerDashboard />} />
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/clientes/:id" element={<ClienteDetalhe />} />
@@ -220,7 +220,6 @@ const App = () => (
             />
             <Route path="/notificacoes" element={<Notificacoes />} />
             <Route path="/financeiro/cobrancas" element={<PaymentCharges />} />
-            <Route path="/financeiro/cobrancas/:id" element={<PaymentChargeDetail />} />
             <Route
               path="/financeiro/conciliacao"
               element={

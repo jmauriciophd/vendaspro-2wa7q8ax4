@@ -11,6 +11,7 @@ import {
   Send,
   Check,
   Copy,
+  Clock,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -57,9 +58,11 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
   const [boletoResult, setBoletoResult] = useState<CreateChargeResult | null>(null)
   const [copiedLine, setCopiedLine] = useState(false)
   const [sendOpen, setSendOpen] = useState(false)
+  const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen) {
+      setDuplicateNotice(null)
       setLoadingProviders(true)
       paymentService
         .listProviders()
@@ -74,6 +77,31 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
         })
         .finally(() => setLoadingProviders(false))
 
+      if (sale?.id) {
+        paymentService
+          .listChargesBySale(sale.id)
+          .then((charges) => {
+            const paid = charges.find((c) => c.status === 'paid')
+            if (paid) {
+              setDuplicateNotice('Esta venda já possui uma cobrança quitada.')
+              return
+            }
+            const active = charges.find(
+              (c) =>
+                c.status === 'pending' ||
+                c.status === 'waiting_payment' ||
+                (c.status as string) === 'processing' ||
+                (c.status as string) === 'under_review',
+            )
+            if (active) {
+              setDuplicateNotice(
+                `Esta venda já possui uma cobrança ativa (#${active.external_charge_id || active.id.slice(-6).toUpperCase()}). Cancele a anterior ou aguarde a baixa para gerar outra.`,
+              )
+            }
+          })
+          .catch(() => {})
+      }
+
       // default +3 dias
       const d = new Date()
       d.setDate(d.getDate() + 3)
@@ -84,7 +112,7 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
       setBoletoResult(null)
       setSendOpen(false)
     }
-  }, [isOpen])
+  }, [isOpen, sale?.id])
 
   const selectedProvider = useMemo(
     () => providers.find((p) => p.id === providerId) || null,
@@ -133,6 +161,10 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
       : final
 
   const handleSubmit = async () => {
+    if (duplicateNotice) {
+      toast.error(duplicateNotice)
+      return
+    }
     if (!providerId || !method) {
       toast.error('Selecione provedor e forma de pagamento.')
       return
@@ -372,6 +404,17 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
             </div>
           </div>
 
+          {/* Alerta de Duplicidade */}
+          {duplicateNotice && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-900">
+              <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Bloqueio de Duplicidade</p>
+                <p className="text-[11px] text-amber-800 mt-0.5">{duplicateNotice}</p>
+              </div>
+            </div>
+          )}
+
           {/* Valor */}
           <div className="p-3 rounded-xl bg-indigo-50/50 border border-indigo-100 flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
@@ -533,15 +576,15 @@ export const GenerateChargeModal: React.FC<GenerateChargeModalProps> = ({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={submitting || !providerId || !method}
-            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-semibold rounded-xl shadow-xs shadow-indigo-600/20 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-70"
+            disabled={submitting || !providerId || !method || Boolean(duplicateNotice)}
+            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-semibold rounded-xl shadow-xs shadow-indigo-600/20 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <CreditCard className="w-4 h-4" />
             )}
-            Gerar link
+            {duplicateNotice ? 'Cobrança Já Existe' : 'Gerar link'}
           </button>
         </div>
       </div>

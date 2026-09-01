@@ -614,7 +614,8 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                     (c) =>
                       c.status === 'pending' ||
                       c.status === 'waiting_payment' ||
-                      (c.status as string) === 'processing',
+                      (c.status as string) === 'processing' ||
+                      (c.status as string) === 'under_review',
                   )
                   const paidCharge = charges.find((c) => c.status === 'paid')
                   const isPaid = sale.payment_status === 'pago' || Boolean(paidCharge)
@@ -629,7 +630,7 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                         {paidCharge && (
                           <button
                             onClick={() => navigate(`/financeiro/cobrancas/${paidCharge.id}`)}
-                            className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-white border border-emerald-200 rounded-lg shadow-xs hover:bg-emerald-50 transition-colors"
+                            className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-white border border-emerald-200 rounded-lg shadow-xs hover:bg-emerald-50 transition-colors cursor-pointer"
                           >
                             Ver cobrança
                           </button>
@@ -657,7 +658,7 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                         </div>
                         <button
                           onClick={() => navigate(`/financeiro/cobrancas/${activeCharge.id}`)}
-                          className="px-2.5 py-1 text-[11px] font-bold text-amber-800 hover:text-amber-950 bg-white border border-amber-300 rounded-lg shadow-xs hover:bg-amber-50 transition-colors shrink-0"
+                          className="px-2.5 py-1 text-[11px] font-bold text-amber-800 hover:text-amber-950 bg-white border border-amber-300 rounded-lg shadow-xs hover:bg-amber-50 transition-colors shrink-0 cursor-pointer"
                         >
                           Ver cobrança
                         </button>
@@ -674,7 +675,8 @@ export const ViewSaleModal: React.FC<ViewSaleModalProps> = ({ isOpen, onClose, s
                       (c) =>
                         c.status === 'pending' ||
                         c.status === 'waiting_payment' ||
-                        (c.status as string) === 'processing',
+                        (c.status as string) === 'processing' ||
+                        (c.status as string) === 'under_review',
                     )
                     const paidCharge = charges.find((c) => c.status === 'paid')
                     const isPaid = sale.payment_status === 'pago' || Boolean(paidCharge)
