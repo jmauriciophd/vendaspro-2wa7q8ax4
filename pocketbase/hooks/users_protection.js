@@ -174,7 +174,41 @@ onRecordUpdateRequest((e) => {
     }
   }
 
-  // 2. Permissão de edição para outros usuários
+  // 2. Proteção contra auto-elevação de privilégios / mass-assignment quando editando o próprio perfil diretamente
+  if (isSelf && !isActorSuper && actorRole !== 'admin') {
+    // Se um vendedor ou gerente tentar injetar role diferente da atual
+    if (body.role !== undefined && body.role !== record.getString('role')) {
+      try {
+        const auditCol = $app.findCollectionByNameOrId('audit_logs')
+        const audit = new Record(auditCol)
+        audit.set('actor', auth.id)
+        audit.set('target', record.id)
+        audit.set('action', 'privilege_escalation_attempt')
+        audit.set('module', 'users')
+        audit.set(
+          'description',
+          'Tentativa de alteração não autorizada de cargo pelo usuário: ' + body.role,
+        )
+        audit.set('ip', ip)
+        audit.set('user_agent', ua)
+        audit.set('result', 'blocked')
+        $app.save(audit)
+      } catch (_) {}
+      throw new ForbiddenError(
+        'Você não tem permissão para alterar seu próprio cargo ou perfil administrativo.',
+      )
+    }
+
+    if (body.is_super_admin !== undefined && body.is_super_admin !== record.get('is_super_admin')) {
+      throw new ForbiddenError('Você não tem permissão para alterar o status de super admin.')
+    }
+
+    if (body.permissions !== undefined) {
+      throw new ForbiddenError('Você não tem permissão para alterar suas próprias permissões.')
+    }
+  }
+
+  // 3. Permissão de edição para outros usuários
   if (!isSelf) {
     const canEdit = isActorSuper || actorRole === 'admin' || actorPerms.indexOf('users.edit') !== -1
     const canDisable =

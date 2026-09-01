@@ -29,6 +29,7 @@ import FinancialReport from './pages/FinancialReport'
 import Auditoria from './pages/Auditoria'
 import Backups from './pages/Backups'
 import EmailSettings from './pages/EmailSettings'
+import MeuPerfil from './pages/MeuPerfil'
 import NotFound from './pages/NotFound'
 import { PageBuilder } from './pages/PageBuilder'
 import { TemplatesList } from './pages/TemplatesList'
@@ -155,6 +156,8 @@ const App = () => (
             <Route path="/seller-catalogs" element={<SellerCatalogs />} />
             <Route path="/pages" element={<SalePagesList />} />
             <Route path="/templates" element={<TemplatesList />} />
+            <Route path="/perfil" element={<MeuPerfil />} />
+            <Route path="/meu-perfil" element={<MeuPerfil />} />
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/clientes/:id" element={<ClienteDetalhe />} />

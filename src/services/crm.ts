@@ -325,6 +325,65 @@ export const userService = {
   async delete(id: string) {
     return await pb.collection('users').delete(id)
   },
+
+  /** Retorna a URL pública completa do avatar do usuário ou string vazia */
+  avatarUrl(user: User | null): string {
+    if (!user || !user.avatar) return ''
+    return pb.files.getUrl(user, user.avatar)
+  },
+}
+
+export const profileService = {
+  /** Obter perfil do usuário logado */
+  async getProfile(): Promise<User> {
+    return await pb.send<User>('/backend/v1/profile', {
+      method: 'GET',
+    })
+  },
+
+  /** Atualizar dados permitidos do perfil (nome, telefone e foto) */
+  async updateProfile(data: {
+    name?: string
+    phone?: string
+    avatar?: File | null
+    remove_avatar?: boolean
+  }): Promise<{ success: boolean; message: string; user: User }> {
+    if (data.avatar instanceof File) {
+      const formData = new FormData()
+      if (data.name !== undefined) formData.append('name', data.name)
+      if (data.phone !== undefined) formData.append('phone', data.phone)
+      formData.append('avatar', data.avatar)
+
+      return await pb.send<{ success: boolean; message: string; user: User }>(
+        '/backend/v1/profile',
+        {
+          method: 'PUT',
+          body: formData,
+        },
+      )
+    }
+
+    return await pb.send<{ success: boolean; message: string; user: User }>('/backend/v1/profile', {
+      method: 'PUT',
+      body: {
+        name: data.name,
+        phone: data.phone,
+        remove_avatar: data.remove_avatar,
+      },
+    })
+  },
+
+  /** Alterar senha do próprio usuário autenticado */
+  async changePassword(data: {
+    current_password: string
+    new_password: string
+    confirm_password: string
+  }): Promise<{ success: boolean; message: string }> {
+    return await pb.send<{ success: boolean; message: string }>('/backend/v1/profile/password', {
+      method: 'POST',
+      body: data,
+    })
+  },
 }
 
 export const auditLogService = {

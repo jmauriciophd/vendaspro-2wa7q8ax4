@@ -217,6 +217,7 @@ export interface User extends RecordModel {
   id: string
   email: string
   name?: string
+  phone?: string
   avatar?: string
   role?: UserRole
   active?: boolean

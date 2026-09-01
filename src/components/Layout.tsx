@@ -34,10 +34,17 @@ import {
   Globe,
   LayoutTemplate,
   ShoppingBag,
+  User as UserIcon,
 } from 'lucide-react'
 import { NotificationCenter } from '@/components/notifications/NotificationCenter'
 import { QuickCustomerModal } from '@/components/QuickCustomerModal'
-import { customerService, dealService, companyService, reminderService } from '@/services/crm'
+import {
+  customerService,
+  dealService,
+  companyService,
+  reminderService,
+  userService,
+} from '@/services/crm'
 import type { Customer, Deal, CompanySettings, Reminder } from '@/types/crm'
 import { CompanySettingsModal } from '@/components/CompanySettingsModal'
 import { toast } from 'sonner'
@@ -53,6 +60,8 @@ export default function Layout() {
   const [quickCustomerModalOpen, setQuickCustomerModalOpen] = useState(false)
   const [companySettingsOpen, setCompanySettingsOpen] = useState(false)
   const [company, setCompany] = useState<CompanySettings | null>(null)
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false)
+  const userDropdownRef = useRef<HTMLDivElement>(null)
 
   // Reminders (bell) state
   const [reminders, setReminders] = useState<Reminder[]>([])
@@ -80,6 +89,17 @@ export default function Layout() {
     function handleClickOutside(event: MouseEvent) {
       if (remindersRef.current && !remindersRef.current.contains(event.target as Node)) {
         setShowReminders(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Close user dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
+        setUserDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -341,20 +361,33 @@ export default function Layout() {
               <span>Dados da Empresa</span>
             </button>
           )}
-          <div className="p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between gap-2">
+          <div
+            onClick={() => navigate('/perfil')}
+            className="p-2.5 rounded-xl bg-white hover:bg-indigo-50/50 border border-slate-200/80 hover:border-indigo-200 shadow-xs flex items-center justify-between gap-2 cursor-pointer transition-all group"
+            title="Acessar Meu Perfil"
+          >
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600/10 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0 border border-indigo-200/50">
-                {userInitials}
-              </div>
+              {user.avatar ? (
+                <img
+                  src={userService.avatarUrl(user)}
+                  alt={user.name || 'Avatar'}
+                  className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-indigo-600/10 text-indigo-700 group-hover:bg-indigo-600 group-hover:text-white font-bold text-xs flex items-center justify-center shrink-0 border border-indigo-200/50 transition-colors">
+                  {userInitials}
+                </div>
+              )}
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-800 truncate leading-tight">
+                <p className="text-xs font-semibold text-slate-800 group-hover:text-indigo-700 truncate leading-tight">
                   {user.name || 'Vendedor'}
                 </p>
-                <p className="text-[11px] text-slate-400 truncate leading-tight">{user.email}</p>
+                <p className="text-[11px] text-slate-400 truncate leading-tight">Meu Perfil</p>
               </div>
             </div>
             <button
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation()
                 logout()
                 navigate('/login')
               }}
@@ -416,26 +449,41 @@ export default function Layout() {
               ))}
             </nav>
 
-            <div className="p-4 border-t border-slate-100">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center">
-                    {userInitials}
-                  </div>
+            <div className="p-4 border-t border-slate-100 space-y-2">
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false)
+                  navigate('/perfil')
+                }}
+                className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-50 hover:bg-indigo-50 border border-slate-200/80 transition-colors text-left"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  {user.avatar ? (
+                    <img
+                      src={userService.avatarUrl(user)}
+                      alt={user.name || 'Avatar'}
+                      className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0">
+                      {userInitials}
+                    </div>
+                  )}
                   <div className="overflow-hidden">
                     <p className="text-xs font-semibold text-slate-800 truncate">
                       {user.name || 'Vendedor'}
                     </p>
-                    <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
+                    <p className="text-[10px] text-indigo-600 font-medium">Ver Meu Perfil</p>
                   </div>
                 </div>
-              </div>
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+              </button>
               <button
                 onClick={() => {
                   logout()
                   navigate('/login')
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-red-100"
+                className="w-full flex items-center justify-center gap-2 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-red-100 cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Sair da conta</span>
@@ -681,8 +729,86 @@ export default function Layout() {
               )}
             </div>
 
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/60 font-bold text-xs flex items-center justify-center shrink-0">
-              {userInitials}
+            {/* Header Avatar / User Menu */}
+            <div ref={userDropdownRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setUserDropdownOpen((o) => !o)}
+                title="Meu Perfil e Opções"
+                className="flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 border border-transparent hover:border-slate-200 transition-all cursor-pointer"
+              >
+                {user.avatar ? (
+                  <img
+                    src={userService.avatarUrl(user)}
+                    alt={user.name || 'Avatar'}
+                    className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/60 font-bold text-xs flex items-center justify-center shrink-0">
+                    {userInitials}
+                  </div>
+                )}
+                <div className="hidden md:block text-left pr-1">
+                  <p className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[120px]">
+                    {user.name || 'Usuário'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 leading-none capitalize">
+                    {user.role || 'vendedor'}
+                  </p>
+                </div>
+              </button>
+
+              {userDropdownOpen && (
+                <div className="absolute top-full right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in-50 zoom-in-95 duration-150 p-1.5">
+                  <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                    <p className="text-xs font-bold text-slate-800 truncate">
+                      {user.name || 'Usuário'}
+                    </p>
+                    <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserDropdownOpen(false)
+                      navigate('/perfil')
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <UserIcon className="w-4 h-4 text-indigo-600" />
+                    <span>Meu Perfil</span>
+                  </button>
+
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserDropdownOpen(false)
+                        setCompanySettingsOpen(true)
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
+                    >
+                      <Settings className="w-4 h-4 text-slate-400" />
+                      <span>Dados da Empresa</span>
+                    </button>
+                  )}
+
+                  <div className="border-t border-slate-100 my-1" />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserDropdownOpen(false)
+                      logout()
+                      navigate('/login')
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Sair da conta</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
