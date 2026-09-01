@@ -285,10 +285,15 @@ export function resolvePaymentUrl(url?: string | null, chargeId?: string | null)
     }
   }
 
-  // Se for uma URL que termina com /financeiro/cobrancas/ sem o ID e temos o chargeId
+  // Se for uma URL que termina com /financeiro/cobrancas/ ou /cobranca/ ou /pagar/ sem o ID e temos o chargeId
   if (
     chargeId &&
-    (trimmed.endsWith('/financeiro/cobrancas/') || trimmed.endsWith('/financeiro/cobrancas'))
+    (trimmed.endsWith('/financeiro/cobrancas/') ||
+      trimmed.endsWith('/financeiro/cobrancas') ||
+      trimmed.endsWith('/cobranca/') ||
+      trimmed.endsWith('/cobranca') ||
+      trimmed.endsWith('/pagar/') ||
+      trimmed.endsWith('/pagar'))
   ) {
     const baseClean = trimmed.replace(/\/+$/, '')
     return `${baseClean}/${chargeId}`
@@ -299,7 +304,12 @@ export function resolvePaymentUrl(url?: string | null, chargeId?: string | null)
     let full = `${currentOrigin}${trimmed}`
     if (
       chargeId &&
-      (full.endsWith('/financeiro/cobrancas/') || full.endsWith('/financeiro/cobrancas'))
+      (full.endsWith('/financeiro/cobrancas/') ||
+        full.endsWith('/financeiro/cobrancas') ||
+        full.endsWith('/cobranca/') ||
+        full.endsWith('/cobranca') ||
+        full.endsWith('/pagar/') ||
+        full.endsWith('/pagar'))
     ) {
       const baseClean = full.replace(/\/+$/, '')
       return `${baseClean}/${chargeId}`

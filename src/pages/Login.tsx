@@ -139,6 +139,7 @@ export default function Login() {
               </div>
               <input
                 type="email"
+                autoComplete="username"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value)
@@ -178,6 +179,7 @@ export default function Login() {
               </div>
               <input
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value)

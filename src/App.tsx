@@ -140,6 +140,8 @@ const App = () => (
           {/* Rotas Públicas de Catálogos e Lojas Autenticadas */}
           <Route path="/v/:slug" element={<PublicCatalogView />} />
           <Route path="/catalogo/:slug" element={<PublicCatalogView />} />
+          <Route path="/pagar/:id" element={<PaymentChargeDetail />} />
+          <Route path="/cobranca/:id" element={<PaymentChargeDetail />} />
 
           {/* Rota Tela Cheia do Page Builder */}
           <Route path="/pages/builder/:pageId" element={<PageBuilder />} />

@@ -1217,7 +1217,19 @@ routerAdd('GET', '/backend/v1/payments/charges/{id}', (e) => {
     try {
       const pRec = $app.findRecordById('payment_providers', rec.get('provider_id') || '')
       providerEnv = pRec.get('environment') || 'sandbox'
-      providerPublicKey = (pRec.get('api_secret') || pRec.get('api_key') || '').toString().trim()
+      // No Mercado Pago, a Public Key começa com TEST- ou APP_USR- (usada no frontend)
+      // Se api_key foi salva como public key ou api_secret, selecionamos a chave pública adequada
+      const k1 = (pRec.get('api_key') || '').toString().trim()
+      const k2 = (pRec.get('api_secret') || '').toString().trim()
+      // Se uma delas for Public Key e a outra Access Token, prioriza a que tem padrão de public key
+      // Caso contrário usa api_key
+      if (k1.startsWith('TEST-') || k1.startsWith('APP_USR-')) {
+        providerPublicKey = k1
+      } else if (k2.startsWith('TEST-') || k2.startsWith('APP_USR-')) {
+        providerPublicKey = k2
+      } else {
+        providerPublicKey = k1 || k2
+      }
     } catch (_) {}
   }
 

@@ -156,7 +156,9 @@ export default function Layout() {
   const isPublicRoute =
     location.pathname.startsWith('/v/') ||
     location.pathname.startsWith('/catalogo/') ||
-    location.pathname.startsWith('/financeiro/cobrancas/')
+    location.pathname.startsWith('/financeiro/cobrancas/') ||
+    location.pathname.startsWith('/pagar/') ||
+    location.pathname.startsWith('/cobranca/')
 
   // Auth protection check
   useEffect(() => {

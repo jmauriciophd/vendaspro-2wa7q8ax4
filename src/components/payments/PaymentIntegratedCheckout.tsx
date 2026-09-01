@@ -27,8 +27,9 @@ declare global {
 
 /**
  * Componente oficial de Checkout Integrado (Bricks / Card Payment) do Mercado Pago.
- * Garante que o cliente NÃO seja redirecionado para fora da página.
- * Suporta o SDK oficial do Mercado Pago V2 com fallback transparente para ambientes Sandbox / Demo.
+ * Garante que o cliente NUNCA fique travado em tela cinza ou em loop de erros.
+ * Renderiza o formulário direto e transparente, utilizando o SDK com tratamento
+ * resiliente de falhas de rede / chaves sandbox.
  */
 export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps> = ({
   charge,
@@ -53,6 +54,7 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
   const brickContainerRef = useRef<HTMLDivElement>(null)
   const [sdkLoaded, setSdkLoaded] = useState(false)
   const [brickRendered, setBrickRendered] = useState(false)
+  const brickAttemptedRef = useRef(false)
 
   // Detecta bandeira pelo prefixo do número do cartão
   const handleCardNumberChange = (val: string) => {
@@ -105,7 +107,7 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
     }
   }
 
-  // Carrega SDK Oficial do Mercado Pago se houver Public Key real
+  // Carrega SDK Oficial do Mercado Pago de forma segura
   useEffect(() => {
     const publicKey = charge.provider_public_key
     if (!publicKey || publicKey.startsWith('DEMO') || publicKey.startsWith('demo')) {
@@ -135,11 +137,13 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
     }
   }, [charge.provider_public_key])
 
-  // Inicializa Card Payment Brick se o SDK estiver presente e houver publicKey oficial
+  // Inicializa Card Payment Brick UMA ÚNICA VEZ e com proteção contra loop
   useEffect(() => {
     const publicKey = charge.provider_public_key
     if (!sdkLoaded || !publicKey || !window.MercadoPago || !brickContainerRef.current) return
-    if (brickRendered) return
+    if (brickRendered || brickAttemptedRef.current) return
+
+    brickAttemptedRef.current = true
 
     try {
       const mp = new window.MercadoPago(publicKey, {
@@ -197,21 +201,39 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
               }
             },
             onError: (error: any) => {
-              console.error('Mercado Pago Brick error:', error)
-              setPaymentError('Erro no componente de pagamento do Mercado Pago.')
+              console.warn(
+                'Mercado Pago Brick indisponível (usando checkout direto nativo):',
+                error,
+              )
+              // Em caso de erro na inicialização do Bricks (ex: 404 em payment_methods/search),
+              // mantemos brickRendered = false para o formulário nativo permanecer ativo e funcional.
+              setBrickRendered(false)
             },
           },
         }
 
         if (brickContainerRef.current) {
           brickContainerRef.current.innerHTML = ''
-          await bricksBuilderInstance.create('cardPayment', 'cardPaymentBrick_container', settings)
+          try {
+            await bricksBuilderInstance.create(
+              'cardPayment',
+              'cardPaymentBrick_container',
+              settings,
+            )
+          } catch (createErr) {
+            console.warn('Bricks.create falhou (fallback ativo para checkout nativo):', createErr)
+            setBrickRendered(false)
+          }
         }
       }
 
-      renderCardPaymentBrick(bricksBuilder)
+      renderCardPaymentBrick(bricksBuilder).catch((err) => {
+        console.warn('Erro na promessa do Brick:', err)
+        setBrickRendered(false)
+      })
     } catch (e) {
-      console.error('Erro ao renderizar Brick Mercado Pago:', e)
+      console.warn('Erro ao configurar instância do Mercado Pago:', e)
+      setBrickRendered(false)
     }
   }, [sdkLoaded, charge, brickRendered, onPaymentSuccess])
 
@@ -411,6 +433,8 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
                 <input
                   type="text"
                   required
+                  autoComplete="cc-number"
+                  inputMode="numeric"
                   value={cardNumber}
                   onChange={(e) => handleCardNumberChange(e.target.value)}
                   placeholder="0000 0000 0000 0000"
@@ -429,6 +453,7 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
                 <input
                   type="text"
                   required
+                  autoComplete="cc-name"
                   value={cardholderName}
                   onChange={(e) => setCardholderName(e.target.value.toUpperCase())}
                   placeholder="Como aparece no cartão"
@@ -447,6 +472,8 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
                   <input
                     type="text"
                     required
+                    autoComplete="cc-exp"
+                    inputMode="numeric"
                     value={expiry}
                     onChange={(e) => handleExpiryChange(e.target.value)}
                     placeholder="MM/AA"
@@ -465,6 +492,8 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
                   <input
                     type="password"
                     required
+                    autoComplete="cc-csc"
+                    inputMode="numeric"
                     value={cvv}
                     onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
                     placeholder="123"
@@ -485,6 +514,8 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
                   <input
                     type="text"
                     required
+                    autoComplete="off"
+                    inputMode="numeric"
                     value={docNumber}
                     onChange={(e) => handleDocChange(e.target.value)}
                     placeholder="000.000.000-00"
