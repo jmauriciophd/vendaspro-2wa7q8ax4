@@ -41,8 +41,17 @@ import { SendChargeModal } from '@/components/payments/SendChargeModal'
 import { BoletoView } from '@/components/payments/BoletoView'
 import { PaymentIntegratedCheckout } from '@/components/payments/PaymentIntegratedCheckout'
 import { usePaymentStatus } from '@/hooks/usePaymentStatus'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 export default function PaymentChargeDetail() {
+  return (
+    <ErrorBoundary fallbackTitle="Erro ao carregar detalhes da cobrança">
+      <PaymentChargeDetailContent />
+    </ErrorBoundary>
+  )
+}
+
+function PaymentChargeDetailContent() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { isManager, isAdmin, user } = useAuth()

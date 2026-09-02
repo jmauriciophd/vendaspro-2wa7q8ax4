@@ -35,13 +35,25 @@ export function usePolling<T = void>(
   } = options
 
   const [isRunning, setIsRunning] = useState(enabled)
+  const isRunningRef = useRef(enabled)
+  isRunningRef.current = isRunning
+
   const currentIntervalRef = useRef(interval)
   const startTimeRef = useRef<number>(Date.now())
   const timerRef = useRef<any>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const isExecutingRef = useRef(false)
+  const isMountedRef = useRef(true)
+
+  // Armazena callbacks em refs para que usePolling não recrie loops se o caller mudar referências
+  const callbackRef = useRef(callback)
+  callbackRef.current = callback
+
+  const onMaxDurationReachedRef = useRef(onMaxDurationReached)
+  onMaxDurationReachedRef.current = onMaxDurationReached
 
   const stop = useCallback(() => {
+    isRunningRef.current = false
     setIsRunning(false)
     if (timerRef.current) {
       clearTimeout(timerRef.current)
@@ -57,24 +69,45 @@ export function usePolling<T = void>(
     stop()
     currentIntervalRef.current = interval
     startTimeRef.current = Date.now()
+    isRunningRef.current = true
     setIsRunning(true)
   }, [interval, stop])
 
+  const scheduleNext = useCallback(
+    (delayMs?: number) => {
+      if (!isMountedRef.current || !isRunningRef.current) return
+      if (timerRef.current) clearTimeout(timerRef.current)
+
+      let delay = delayMs ?? currentIntervalRef.current
+      if (jitter) {
+        const jitterDelta = delay * (Math.random() * 0.2)
+        delay += jitterDelta
+      }
+      // Garante delay mínimo de 1.5s para evitar flood
+      const safeDelay = Math.max(1500, delay)
+      timerRef.current = setTimeout(() => {
+        executeTick()
+      }, safeDelay)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [jitter],
+  )
+
   const executeTick = useCallback(async () => {
-    if (!isRunning) return
+    if (!isMountedRef.current || !isRunningRef.current) return
 
     // Verifica limite máximo de duração (ex: 15 minutos de espera de pagamento)
-    const elapsed = Date.now() - startTimeRef.current
+    const startTime = startTimeRef.current || Date.now()
+    const elapsed = Date.now() - startTime
     if (maxDuration > 0 && elapsed >= maxDuration) {
       stop()
-      if (onMaxDurationReached) onMaxDurationReached()
+      if (onMaxDurationReachedRef.current) onMaxDurationReachedRef.current()
       return
     }
 
-    // Se aba estiver oculta e pauseOnHidden ativo, pula ou atrasa
+    // Se aba estiver oculta e pauseOnHidden ativo, atrasa
     if (pauseOnHidden && typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-      // Agenda checagem lenta de 15 segundos
-      timerRef.current = setTimeout(executeTick, 15000)
+      scheduleNext(15000)
       return
     }
 
@@ -84,23 +117,31 @@ export function usePolling<T = void>(
 
     // Cancela requisição anterior pendente se houver
     if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
+      try {
+        abortControllerRef.current.abort()
+      } catch {
+        // ignore
+      }
     }
     abortControllerRef.current = new AbortController()
 
     isExecutingRef.current = true
+    let shouldContinue = true
+
     try {
-      const result = await callback(abortControllerRef.current.signal)
-      // Se a função de callback retornar expressamente false, para o polling (ex: pagamento finalizado)
-      if (result === false) {
-        stop()
-        return
+      if (callbackRef.current) {
+        const result = await callbackRef.current(abortControllerRef.current.signal)
+        // Se o callback retornar expressamente false, para o polling
+        if (result === false) {
+          shouldContinue = false
+          stop()
+          return
+        }
       }
 
       // Aplica backoff exponencial gradual
       currentIntervalRef.current = Math.min(maxInterval, currentIntervalRef.current * backoffFactor)
     } catch (err: any) {
-      // Se foi cancelado intencionalmente, não conta como erro
       if (err?.name !== 'AbortError') {
         currentIntervalRef.current = Math.min(
           maxInterval,
@@ -109,39 +150,36 @@ export function usePolling<T = void>(
       }
     } finally {
       isExecutingRef.current = false
-      if (isRunning) {
-        let nextDelay = currentIntervalRef.current
-        if (jitter) {
-          // Jitter aleatório entre 0 e 20%
-          const jitterDelta = nextDelay * (Math.random() * 0.2)
-          nextDelay += jitterDelta
-        }
-        timerRef.current = setTimeout(executeTick, nextDelay)
+      if (isMountedRef.current && isRunningRef.current && shouldContinue) {
+        scheduleNext()
       }
     }
-  }, [
-    isRunning,
-    maxDuration,
-    pauseOnHidden,
-    callback,
-    stop,
-    onMaxDurationReached,
-    maxInterval,
-    backoffFactor,
-    jitter,
-  ])
+  }, [maxDuration, pauseOnHidden, stop, maxInterval, backoffFactor, scheduleNext])
 
   useEffect(() => {
+    isMountedRef.current = true
+    isRunningRef.current = enabled
     setIsRunning(enabled)
+
     if (enabled) {
       currentIntervalRef.current = interval
       startTimeRef.current = Date.now()
-      executeTick()
+      // Pequeno timeout inicial para permitir que o primeiro render do componente complete
+      const startTimer = setTimeout(() => {
+        if (isMountedRef.current && isRunningRef.current) {
+          executeTick()
+        }
+      }, 50)
+      return () => {
+        clearTimeout(startTimer)
+        stop()
+      }
     } else {
       stop()
     }
 
     return () => {
+      isMountedRef.current = false
       stop()
     }
   }, [enabled, interval, executeTick, stop])
@@ -151,11 +189,11 @@ export function usePolling<T = void>(
     if (!pauseOnHidden) return
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && isRunning) {
-        // Ao voltar para a aba, reseta intervalo e executa imediatamente
+      if (document.visibilityState === 'visible' && isRunningRef.current) {
+        // Ao voltar para a aba, agenda checagem
         currentIntervalRef.current = interval
         if (timerRef.current) clearTimeout(timerRef.current)
-        executeTick()
+        scheduleNext(500)
       }
     }
 
@@ -163,7 +201,7 @@ export function usePolling<T = void>(
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [pauseOnHidden, isRunning, interval, executeTick])
+  }, [pauseOnHidden, interval, scheduleNext])
 
   return {
     isRunning,

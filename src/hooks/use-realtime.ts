@@ -22,58 +22,67 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
   callbackRef.current = callback
 
   useEffect(() => {
-    if (!enabled) return
+    // Only subscribe if enabled and valid collection name
+    if (!enabled || !collectionName) return
 
     let unsubscribeFn: (() => Promise<void>) | undefined
     let cancelled = false
-    let unhookAuth: (() => void) | undefined
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
-    const subscribeWhenReady = () => {
+    // Debounce listener callback to protect against rapid burst events that can trigger render loops
+    const safeCallback = (e: RecordSubscription<TRecord>) => {
       if (cancelled) return
-      // PocketBase realtime SSE requires a valid auth token to receive authenticated collection updates
-      if (!pb.authStore.isValid || !pb.authStore.token) {
-        // Wait until authStore becomes valid
-        if (!unhookAuth) {
-          unhookAuth = pb.authStore.onChange(() => {
-            if (pb.authStore.isValid && pb.authStore.token) {
-              if (unhookAuth) {
-                unhookAuth()
-                unhookAuth = undefined
-              }
-              subscribeWhenReady()
-            }
-          })
-        }
-        return
-      }
-
-      pb.collection<TRecord>(collectionName)
-        .subscribe('*', (e) => {
-          callbackRef.current(e)
-        })
-        .then((fn) => {
-          if (cancelled) {
-            fn().catch(() => {})
-          } else {
-            unsubscribeFn = fn
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        if (!cancelled && callbackRef.current) {
+          try {
+            callbackRef.current(e)
+          } catch (cbErr) {
+            console.warn(
+              `[useRealtime] Error in subscription callback for ${collectionName}:`,
+              cbErr,
+            )
           }
-        })
-        .catch((err) => {
-          // Log or silently ignore if connection is dropped
-          console.debug(`Realtime subscription error for ${collectionName}:`, err)
-        })
+        }
+      }, 150)
     }
 
-    subscribeWhenReady()
+    // Delay subscription slightly to allow PocketBase client auth initialization and avoid 400 race conditions
+    const connectTimer = setTimeout(() => {
+      if (cancelled) return
+
+      try {
+        pb.collection<TRecord>(collectionName)
+          .subscribe('*', safeCallback)
+          .then((fn) => {
+            if (cancelled) {
+              fn().catch(() => {})
+            } else {
+              unsubscribeFn = fn
+            }
+          })
+          .catch((err) => {
+            // Silently absorb realtime connection/auth errors to prevent console spam & loop triggers
+            console.warn(
+              `[useRealtime] Failed to subscribe to ${collectionName}:`,
+              err?.message || err,
+            )
+          })
+      } catch (subErr) {
+        console.warn(`[useRealtime] Subscription setup error for ${collectionName}:`, subErr)
+      }
+    }, 200)
 
     return () => {
       cancelled = true
-      if (unhookAuth) {
-        unhookAuth()
-        unhookAuth = undefined
-      }
+      clearTimeout(connectTimer)
+      if (debounceTimer) clearTimeout(debounceTimer)
       if (unsubscribeFn) {
-        unsubscribeFn().catch(() => {})
+        try {
+          unsubscribeFn().catch(() => {})
+        } catch {
+          // ignore cleanup errors
+        }
       }
     }
   }, [collectionName, enabled])

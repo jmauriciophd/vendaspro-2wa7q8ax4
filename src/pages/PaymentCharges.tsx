@@ -27,6 +27,7 @@ import { useAuth } from '@/context/AuthContext'
 import { customerService } from '@/services/crm'
 import type { Customer, User } from '@/types/crm'
 import { userService } from '@/services/crm'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const statusList: ChargeStatus[] = [
   'pending',
@@ -42,6 +43,14 @@ const statusList: ChargeStatus[] = [
 const methodList: PaymentMethod[] = ['pix', 'credit_card', 'debit_card', 'boleto', 'link']
 
 export default function PaymentCharges() {
+  return (
+    <ErrorBoundary fallbackTitle="Erro ao carregar cobranças">
+      <PaymentChargesContent />
+    </ErrorBoundary>
+  )
+}
+
+function PaymentChargesContent() {
   const navigate = useNavigate()
   const { isManager } = useAuth()
   const [charges, setCharges] = useState<PaymentChargeListItem[]>([])

@@ -37,6 +37,7 @@ import { SellerCatalogs } from './pages/SellerCatalogs'
 import { SalePagesList } from './pages/SalePagesList'
 import { PublicCatalogView } from './pages/PublicCatalogView'
 import { useAuth } from '@/context/AuthContext'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 function GerenteRoute({ children }: { children: React.ReactNode }) {
   const { isManager } = useAuth()
@@ -136,136 +137,138 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner position="top-right" richColors />
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          {/* Rotas Públicas de Catálogos e Lojas Autenticadas */}
-          <Route path="/v/:slug" element={<PublicCatalogView />} />
-          <Route path="/catalogo/:slug" element={<PublicCatalogView />} />
-          <Route path="/pagar/:id" element={<PaymentChargeDetail />} />
-          <Route path="/cobranca/:id" element={<PaymentChargeDetail />} />
-          <Route path="/financeiro/cobrancas/:id" element={<PaymentChargeDetail />} />
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            {/* Rotas Públicas de Catálogos e Lojas Autenticadas */}
+            <Route path="/v/:slug" element={<PublicCatalogView />} />
+            <Route path="/catalogo/:slug" element={<PublicCatalogView />} />
+            <Route path="/pagar/:id" element={<PaymentChargeDetail />} />
+            <Route path="/cobranca/:id" element={<PaymentChargeDetail />} />
+            <Route path="/financeiro/cobrancas/:id" element={<PaymentChargeDetail />} />
 
-          {/* Rota Tela Cheia do Page Builder */}
-          <Route path="/pages/builder/:pageId" element={<PageBuilder />} />
-          <Route path="/pages/builder/new" element={<PageBuilder />} />
-          <Route path="/pages/builder/template/:templateId" element={<PageBuilder />} />
+            {/* Rota Tela Cheia do Page Builder */}
+            <Route path="/pages/builder/:pageId" element={<PageBuilder />} />
+            <Route path="/pages/builder/new" element={<PageBuilder />} />
+            <Route path="/pages/builder/template/:templateId" element={<PageBuilder />} />
 
-          <Route element={<Layout />}>
-            <Route path="/" element={<Index />} />
-            <Route path="/meu-dashboard" element={<SellerDashboard />} />
-            <Route path="/seller-catalogs" element={<SellerCatalogs />} />
-            <Route path="/pages" element={<SalePagesList />} />
-            <Route path="/templates" element={<TemplatesList />} />
-            <Route path="/perfil" element={<MeuPerfil />} />
-            <Route path="/meu-perfil" element={<MeuPerfil />} />
-            <Route path="/pipeline" element={<Pipeline />} />
-            <Route path="/clientes" element={<Clientes />} />
-            <Route path="/clientes/:id" element={<ClienteDetalhe />} />
-            <Route path="/vendas" element={<Vendas />} />
-            <Route path="/produtos" element={<Produtos />} />
-            <Route path="/produtos/:id" element={<ProdutoDetalhe />} />
-            <Route
-              path="/equipe"
-              element={
-                <GerenteRoute>
-                  <Equipe />
-                </GerenteRoute>
-              }
-            />
-            <Route
-              path="/relatorios"
-              element={
-                <GerenteRoute>
-                  <Relatorios />
-                </GerenteRoute>
-              }
-            />
-            <Route
-              path="/relatorios/desempenho"
-              element={
-                <GerenteRoute>
-                  <PerformanceReport />
-                </GerenteRoute>
-              }
-            />
-            <Route
-              path="/relatorios/financeiro"
-              element={
-                <GerenteRoute>
-                  <FinancialReport />
-                </GerenteRoute>
-              }
-            />
-            <Route
-              path="/metas"
-              element={
-                <GerenteRoute>
-                  <Metas />
-                </GerenteRoute>
-              }
-            />
-            <Route
-              path="/metas/categorias"
-              element={
-                <GerenteRoute>
-                  <CategoryGoals />
-                </GerenteRoute>
-              }
-            />
-            <Route path="/comissoes" element={<Commissions />} />
-            <Route
-              path="/pipeline-funil"
-              element={
-                <GerenteRoute>
-                  <SalesFunnel />
-                </GerenteRoute>
-              }
-            />
-            <Route path="/notificacoes" element={<Notificacoes />} />
-            <Route path="/financeiro/cobrancas" element={<PaymentCharges />} />
-            <Route
-              path="/financeiro/conciliacao"
-              element={
-                <GerenteRoute>
-                  <Reconciliation />
-                </GerenteRoute>
-              }
-            />
-            <Route
-              path="/configuracoes/pagamentos"
-              element={
-                <AdminRoute>
-                  <PaymentSettings />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/auditoria"
-              element={
-                <AuditRoute>
-                  <Auditoria />
-                </AuditRoute>
-              }
-            />
-            <Route
-              path="/configuracoes/backups"
-              element={
-                <BackupRoute>
-                  <Backups />
-                </BackupRoute>
-              }
-            />
-            <Route
-              path="/configuracoes/email"
-              element={
-                <EmailSettingsRoute>
-                  <EmailSettings />
-                </EmailSettingsRoute>
-              }
-            />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+            <Route element={<Layout />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/meu-dashboard" element={<SellerDashboard />} />
+              <Route path="/seller-catalogs" element={<SellerCatalogs />} />
+              <Route path="/pages" element={<SalePagesList />} />
+              <Route path="/templates" element={<TemplatesList />} />
+              <Route path="/perfil" element={<MeuPerfil />} />
+              <Route path="/meu-perfil" element={<MeuPerfil />} />
+              <Route path="/pipeline" element={<Pipeline />} />
+              <Route path="/clientes" element={<Clientes />} />
+              <Route path="/clientes/:id" element={<ClienteDetalhe />} />
+              <Route path="/vendas" element={<Vendas />} />
+              <Route path="/produtos" element={<Produtos />} />
+              <Route path="/produtos/:id" element={<ProdutoDetalhe />} />
+              <Route
+                path="/equipe"
+                element={
+                  <GerenteRoute>
+                    <Equipe />
+                  </GerenteRoute>
+                }
+              />
+              <Route
+                path="/relatorios"
+                element={
+                  <GerenteRoute>
+                    <Relatorios />
+                  </GerenteRoute>
+                }
+              />
+              <Route
+                path="/relatorios/desempenho"
+                element={
+                  <GerenteRoute>
+                    <PerformanceReport />
+                  </GerenteRoute>
+                }
+              />
+              <Route
+                path="/relatorios/financeiro"
+                element={
+                  <GerenteRoute>
+                    <FinancialReport />
+                  </GerenteRoute>
+                }
+              />
+              <Route
+                path="/metas"
+                element={
+                  <GerenteRoute>
+                    <Metas />
+                  </GerenteRoute>
+                }
+              />
+              <Route
+                path="/metas/categorias"
+                element={
+                  <GerenteRoute>
+                    <CategoryGoals />
+                  </GerenteRoute>
+                }
+              />
+              <Route path="/comissoes" element={<Commissions />} />
+              <Route
+                path="/pipeline-funil"
+                element={
+                  <GerenteRoute>
+                    <SalesFunnel />
+                  </GerenteRoute>
+                }
+              />
+              <Route path="/notificacoes" element={<Notificacoes />} />
+              <Route path="/financeiro/cobrancas" element={<PaymentCharges />} />
+              <Route
+                path="/financeiro/conciliacao"
+                element={
+                  <GerenteRoute>
+                    <Reconciliation />
+                  </GerenteRoute>
+                }
+              />
+              <Route
+                path="/configuracoes/pagamentos"
+                element={
+                  <AdminRoute>
+                    <PaymentSettings />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/auditoria"
+                element={
+                  <AuditRoute>
+                    <Auditoria />
+                  </AuditRoute>
+                }
+              />
+              <Route
+                path="/configuracoes/backups"
+                element={
+                  <BackupRoute>
+                    <Backups />
+                  </BackupRoute>
+                }
+              />
+              <Route
+                path="/configuracoes/email"
+                element={
+                  <EmailSettingsRoute>
+                    <EmailSettings />
+                  </EmailSettingsRoute>
+                }
+              />
+            </Route>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </ErrorBoundary>
       </TooltipProvider>
     </AuthProvider>
   </BrowserRouter>

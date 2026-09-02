@@ -67,7 +67,27 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
   const [mpCpf, setMpCpf] = useState(customerDoc)
   const [mpInstallments, setMpInstallments] = useState(installments)
 
+  // Se o componente já recebeu o objeto `charge` completo, aproveita diretamente sem refazer request
   useEffect(() => {
+    if (charge) {
+      setChargeData(charge)
+      setPaymentStatus(charge.status)
+      setLoadingCharge(false)
+      if (
+        charge.payment_method === 'pix' ||
+        charge.payment_method === 'boleto' ||
+        charge.payment_method === 'credit_card'
+      ) {
+        setActiveTab(charge.payment_method as any)
+      }
+      return
+    }
+
+    if (!chargeId) {
+      setLoadingCharge(false)
+      return
+    }
+
     let mounted = true
     const loadCharge = async () => {
       try {
@@ -96,7 +116,7 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
     return () => {
       mounted = false
     }
-  }, [chargeId])
+  }, [chargeId, charge])
 
   const providerSlug = (chargeData?.provider_slug || 'mercadopago').toLowerCase()
   const isStripe = providerSlug === 'stripe'

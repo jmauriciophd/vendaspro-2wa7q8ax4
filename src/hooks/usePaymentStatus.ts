@@ -44,6 +44,22 @@ export function usePaymentStatus(
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const previousStatusRef = useRef<ChargeStatus | undefined>(initialCharge?.status)
+  const isMountedRef = useRef(true)
+
+  // Armazena callbacks em refs para evitar recriações desnecessárias
+  const onStatusChangeRef = useRef(onStatusChange)
+  onStatusChangeRef.current = onStatusChange
+  const onPaidRef = useRef(onPaid)
+  onPaidRef.current = onPaid
+  const onFailedRef = useRef(onFailed)
+  onFailedRef.current = onFailed
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   // Atualiza charge se initialCharge mudar externamente
   useEffect(() => {
@@ -54,17 +70,16 @@ export function usePaymentStatus(
   }, [initialCharge])
 
   const isTerminal = charge?.status && TERMINAL_STATUSES.includes(charge.status)
-
-  const targetChargeId = typeof chargeId === 'string' ? chargeId : undefined
+  const targetChargeId =
+    typeof chargeId === 'string' && chargeId.trim().length > 0 ? chargeId.trim() : undefined
 
   const checkStatus = useCallback(
     async (signal?: AbortSignal) => {
       if (!targetChargeId) return false
 
       try {
-        setLoading(true)
         const updated = await paymentService.getCharge(targetChargeId)
-        if (signal?.aborted) return
+        if (signal?.aborted || !isMountedRef.current) return false
 
         setCharge(updated)
         setError(null)
@@ -74,16 +89,16 @@ export function usePaymentStatus(
 
         if (prevStatus !== newStatus) {
           previousStatusRef.current = newStatus
-          if (onStatusChange) {
-            onStatusChange(newStatus)
+          if (onStatusChangeRef.current) {
+            onStatusChangeRef.current(newStatus)
           }
-          if (newStatus === 'paid' && onPaid) {
-            onPaid(updated)
+          if (newStatus === 'paid' && onPaidRef.current) {
+            onPaidRef.current(updated)
           } else if (
             (newStatus === 'canceled' || newStatus === 'expired' || newStatus === 'failed') &&
-            onFailed
+            onFailedRef.current
           ) {
-            onFailed(updated)
+            onFailedRef.current(updated)
           }
         }
 
@@ -94,14 +109,13 @@ export function usePaymentStatus(
 
         return true
       } catch (err: any) {
-        if (!signal?.aborted) {
+        if (!signal?.aborted && isMountedRef.current) {
           setError(err?.message || 'Erro ao verificar status')
         }
-      } finally {
-        setLoading(false)
+        return true
       }
     },
-    [targetChargeId, onStatusChange, onPaid, onFailed],
+    [targetChargeId],
   )
 
   const { isRunning, stop, restart } = usePolling(
@@ -119,8 +133,16 @@ export function usePaymentStatus(
   )
 
   const manualCheck = useCallback(async () => {
-    return await checkStatus()
-  }, [checkStatus])
+    if (!targetChargeId) return
+    setLoading(true)
+    try {
+      await checkStatus()
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false)
+      }
+    }
+  }, [checkStatus, targetChargeId])
 
   return {
     charge,
