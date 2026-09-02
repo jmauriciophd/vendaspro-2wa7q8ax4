@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-02T11:43:21.326Z",
+  "generatedAt": "2026-09-02T14:12:22.938Z",
   "collections": [
     {
       "name": "users",
@@ -1219,6 +1219,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "priority",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "config",
+          "type": "json",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": ["CREATE UNIQUE INDEX idx_payment_providers_slug ON payment_providers (slug)"]

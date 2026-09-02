@@ -13,15 +13,22 @@ import {
   FlaskConical,
   Loader2,
   ExternalLink,
+  Route,
+  Zap,
+  Lock,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { paymentService } from '@/services/paymentService'
 import type {
-  PaymentProvider,
+  PaymentProviderRecord,
   FinancialAccount,
   PaymentMethod,
   PaymentProviderStatus,
   PaymentEnvironment,
+  PaymentRouterRoutes,
+  PaymentProviderSlug,
 } from '@/types/payments'
 
 const ALL_METHODS: Array<{ value: PaymentMethod; label: string }> = [
@@ -32,30 +39,42 @@ const ALL_METHODS: Array<{ value: PaymentMethod; label: string }> = [
   { value: 'link', label: 'Link de Pagamento' },
 ]
 
-type Tab = 'providers' | 'accounts'
+type Tab = 'providers' | 'routing' | 'accounts'
 
 export default function PaymentSettings() {
   const [tab, setTab] = useState<Tab>('providers')
-  const [providers, setProviders] = useState<PaymentProvider[]>([])
+  const [providers, setProviders] = useState<PaymentProviderRecord[]>([])
   const [accounts, setAccounts] = useState<FinancialAccount[]>([])
+  const [routes, setRoutes] = useState<PaymentRouterRoutes>({
+    pix: 'mercadopago',
+    credit_card: 'mercadopago',
+    debit_card: 'mercadopago',
+    boleto: 'mercadopago',
+    link: 'mercadopago',
+  })
   const [loading, setLoading] = useState(true)
-  const [providerModal, setProviderModal] = useState<PaymentProvider | null | 'new'>(null)
+  const [savingRouting, setSavingRouting] = useState(false)
+  const [providerModal, setProviderModal] = useState<PaymentProviderRecord | null | 'new'>(null)
   const [accountModal, setAccountModal] = useState<FinancialAccount | null | 'new'>(null)
-  const [instructionsModal, setInstructionsModal] = useState<PaymentProvider | null>(null)
+  const [instructionsModal, setInstructionsModal] = useState<PaymentProviderRecord | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
     try {
-      const [provs, accs] = await Promise.all([
+      const [provs, accs, rout] = await Promise.all([
         paymentService.listProviders(),
         paymentService.listAccounts(),
+        paymentService.getRouting().catch(() => ({ routes: routes, available_gateways: [] })),
       ])
       setProviders(provs)
       setAccounts(accs)
+      if (rout?.routes) {
+        setRoutes(rout.routes)
+      }
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao carregar configurações.')
+      toast.error('Erro ao carregar configurações de pagamentos.')
     } finally {
       setLoading(false)
     }
@@ -65,12 +84,12 @@ export default function PaymentSettings() {
     load()
   }, [])
 
-  const handleToggleProvider = async (p: PaymentProvider) => {
+  const handleToggleProvider = async (p: PaymentProviderRecord) => {
     try {
       await paymentService.updateProvider(p.id, {
         status: p.status === 'active' ? 'inactive' : 'active',
       })
-      toast.success('Provedor atualizado.')
+      toast.success('Status do provedor atualizado.')
       load()
     } catch (err) {
       console.error(err)
@@ -78,46 +97,44 @@ export default function PaymentSettings() {
     }
   }
 
-  const handleDeleteProvider = async (p: PaymentProvider) => {
-    if (!confirm(`Remover o provedor "${p.name}"?`)) return
+  const handleDeleteProvider = async (p: PaymentProviderRecord) => {
+    if (!confirm(`Desativar o provedor "${p.name}"? O histórico de cobranças e webhooks antigos serão preservados.`)) return
     try {
       await paymentService.deleteProvider(p.id)
-      toast.success('Provedor removido.')
+      toast.success('Provedor desativado com sucesso.')
       load()
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao remover provedor.')
+      toast.error('Erro ao desativar provedor.')
     }
   }
 
-  const handleTestWebhook = async (p: PaymentProvider) => {
-    if (p.environment !== 'sandbox') {
-      toast.error('Teste de webhook só é permitido em ambiente sandbox.')
-      return
-    }
-    if (p.slug !== 'mercadopago') {
-      toast.error('Teste de webhook disponível apenas para Mercado Pago.')
-      return
-    }
+  const handleTestConnection = async (p: PaymentProviderRecord) => {
     setTestingId(p.id)
     try {
-      const res = await paymentService.testMercadoPagoWebhook()
-      toast.success(res.message || 'Webhook de teste processado.')
-      load()
-    } catch (err) {
-      console.error(err)
-      let msg =
-        (err as any)?.response?.message || (err as any)?.message || 'Erro ao testar webhook.'
-      if (
-        msg.includes('Nenhuma cobrança encontrada') &&
-        !msg.includes('Crie uma cobrança de teste')
-      ) {
-        msg =
-          'Nenhuma cobrança encontrada para testar. Crie uma cobrança de teste e tente realizar o pagamento no sandbox antes de testar o webhook.'
+      const res = await paymentService.testProviderConnection(p.id)
+      if (res.success) {
+        toast.success(res.message || 'Integração funcionando com sucesso!')
+      } else {
+        toast.error(res.message || 'Não foi possível autenticar no provedor.')
       }
-      toast.error(msg)
+      load()
+    } catch (err: any) {
+      toast.error(err?.message || 'Falha na comunicação com o gateway.')
     } finally {
       setTestingId(null)
+    }
+  }
+
+  const handleSaveRouting = async () => {
+    setSavingRouting(true)
+    try {
+      await paymentService.updateRouting(routes)
+      toast.success('Regras de roteamento salvas com sucesso!')
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao salvar regras de roteamento.')
+    } finally {
+      setSavingRouting(false)
     }
   }
 
@@ -128,7 +145,7 @@ export default function PaymentSettings() {
           <CreditCard className="w-6 h-6 text-indigo-600" /> Configurações de Pagamentos
         </h1>
         <p className="text-sm text-slate-500 mt-0.5">
-          Gerencie provedores de pagamento e contas financeiras
+          Arquitetura multi-provedor (Mercado Pago, Stripe, Asaas) com roteamento inteligente
         </p>
       </div>
 
@@ -142,7 +159,17 @@ export default function PaymentSettings() {
               : 'bg-white text-slate-600 hover:bg-slate-50'
           }`}
         >
-          <CreditCard className="w-3.5 h-3.5" /> Provedores
+          <CreditCard className="w-3.5 h-3.5" /> Provedores & Gateways
+        </button>
+        <button
+          onClick={() => setTab('routing')}
+          className={`px-5 py-2 transition-colors border-l border-slate-200 flex items-center gap-1.5 ${
+            tab === 'routing'
+              ? 'bg-indigo-600 text-white'
+              : 'bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Route className="w-3.5 h-3.5" /> Roteamento por Método
         </button>
         <button
           onClick={() => setTab('accounts')}
@@ -157,14 +184,21 @@ export default function PaymentSettings() {
       </div>
 
       {loading ? (
-        <div className="p-12 text-center text-xs text-slate-400 animate-pulse">Carregando...</div>
+        <div className="p-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+          <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" /> Carregando configurações...
+        </div>
       ) : tab === 'providers' ? (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-700">Provedores de Pagamento</h3>
+            <div>
+              <h3 className="text-sm font-bold text-slate-700">Provedores de Pagamento</h3>
+              <p className="text-xs text-slate-500">
+                Credenciais são criptografadas em repouso no backend (AES-256) e mascaradas no frontend.
+              </p>
+            </div>
             <button
               onClick={() => setProviderModal('new')}
-              className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
+              className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
             >
               <Plus className="w-3.5 h-3.5" /> Novo provedor
             </button>
@@ -193,7 +227,21 @@ export default function PaymentSettings() {
                   <tbody className="divide-y divide-slate-100">
                     {providers.map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="py-3 px-4 font-semibold text-slate-800">{p.name}</td>
+                        <td className="py-3 px-4 font-semibold text-slate-800">
+                          <div className="flex items-center gap-2">
+                            <span>{p.name}</span>
+                            {p.slug === 'stripe' && (
+                              <span className="text-[9px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-medium">
+                                Stripe Elements
+                              </span>
+                            )}
+                            {p.slug === 'mercadopago' && (
+                              <span className="text-[9px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded font-mono font-medium">
+                                SDK Bricks
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="py-3 px-4 font-mono text-slate-500">{p.slug}</td>
                         <td className="py-3 px-4">
                           <StatusBadge status={p.status} />
@@ -223,10 +271,8 @@ export default function PaymentSettings() {
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono">
-                            <ShieldCheck
-                              className={`w-3 h-3 ${p.webhook_configured ? 'text-emerald-500' : 'text-slate-300'}`}
-                            />
-                            <span>{p.api_key_masked || '—'}</span>
+                            <Lock className="w-3 h-3 text-emerald-600" />
+                            <span>{p.api_key_masked || (p.is_configured ? '••••••••' : 'Não configurado')}</span>
                           </div>
                         </td>
                         <td className="py-3 px-4">
@@ -238,39 +284,29 @@ export default function PaymentSettings() {
                                   : 'bg-amber-50 text-amber-700 border-amber-200'
                               }`}
                             >
-                              {p.webhook_configured ? 'Configurado' : 'Não configurado'}
+                              {p.webhook_configured ? 'Configurado ✓' : 'Pendente'}
                             </span>
-                            {p.slug === 'mercadopago' && (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={() => setInstructionsModal(p)}
-                                  className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg cursor-pointer"
-                                >
-                                  <Info className="w-3 h-3" /> Instruções
-                                </button>
-                                {p.environment === 'sandbox' && (
-                                  <button
-                                    onClick={() => handleTestWebhook(p)}
-                                    disabled={testingId === p.id}
-                                    className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg cursor-pointer disabled:opacity-70"
-                                  >
-                                    {testingId === p.id ? (
-                                      <Loader2 className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <FlaskConical className="w-3 h-3" />
-                                    )}
-                                    Testar
-                                  </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleTestConnection(p)}
+                                disabled={testingId === p.id}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg cursor-pointer disabled:opacity-70"
+                              >
+                                {testingId === p.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <FlaskConical className="w-3 h-3" />
                                 )}
-                              </div>
-                            )}
+                                Testar conexão
+                              </button>
+                            </div>
                           </div>
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => setProviderModal(p)}
-                              title="Editar"
+                              title="Configurar"
                               className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg cursor-pointer"
                             >
                               <Pencil className="w-3.5 h-3.5" />
@@ -288,7 +324,7 @@ export default function PaymentSettings() {
                             </button>
                             <button
                               onClick={() => handleDeleteProvider(p)}
-                              title="Remover"
+                              title="Desativar"
                               className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -303,13 +339,67 @@ export default function PaymentSettings() {
             )}
           </div>
         </div>
+      ) : tab === 'routing' ? (
+        /* ABA DE ROTEAMENTO DINÂMICO */
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+            <div className="flex items-center gap-2 mb-1">
+              <Route className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-base font-bold text-slate-900">Roteamento de Pagamentos (PaymentRouter)</h3>
+            </div>
+            <p className="text-xs text-slate-500 mb-6">
+              Defina qual Gateway ativo processará cada método de pagamento automaticamente no Checkout e Cobranças.
+            </p>
+
+            <div className="space-y-4 max-w-xl">
+              {ALL_METHODS.map((m) => {
+                const currentGateway = routes[m.value] || 'mercadopago'
+                return (
+                  <div key={m.value} className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-2.5">
+                      <Zap className="w-4 h-4 text-indigo-500" />
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">{m.label}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{m.value}</div>
+                      </div>
+                    </div>
+
+                    <select
+                      value={currentGateway}
+                      onChange={(e) => setRoutes({ ...routes, [m.value]: e.target.value as PaymentProviderSlug })}
+                      className="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {providers.map((pr) => (
+                        <option key={pr.id} value={pr.slug}>
+                          {pr.name} ({pr.environment})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              })}
+
+              <div className="pt-4 flex justify-end">
+                <button
+                  onClick={handleSaveRouting}
+                  disabled={savingRouting}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-sm"
+                >
+                  {savingRouting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                  Salvar Regras de Roteamento
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : (
+        /* ABA DE CONTAS FINANCEIRAS */
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-700">Contas Financeiras</h3>
             <button
               onClick={() => setAccountModal('new')}
-              className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
+              className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
             >
               <Plus className="w-3.5 h-3.5" /> Nova conta
             </button>
@@ -440,8 +530,8 @@ function ProviderModal({
   onClose,
   onSaved,
 }: {
-  provider: PaymentProvider | null
-  providers: PaymentProvider[]
+  provider: PaymentProviderRecord | null
+  providers: PaymentProviderRecord[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -458,8 +548,8 @@ function ProviderModal({
   const [webhookConfigured, setWebhookConfigured] = useState(provider?.webhook_configured || false)
   const [saving, setSaving] = useState(false)
 
-  const isMercadoPago =
-    slug.trim().toLowerCase() === 'mercadopago' || provider?.slug === 'mercadopago'
+  const isMercadoPago = slug.trim().toLowerCase() === 'mercadopago' || provider?.slug === 'mercadopago'
+  const isStripe = slug.trim().toLowerCase() === 'stripe' || provider?.slug === 'stripe'
 
   const toggleMethod = (m: PaymentMethod) => {
     setMethods((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]))
@@ -480,16 +570,16 @@ function ProviderModal({
         methods,
         webhook_configured: webhookConfigured,
       }
-      if (apiKey) payload.api_key = apiKey
-      if (apiSecret) payload.api_secret = apiSecret
-      if (webhookSecret) payload.webhook_secret = webhookSecret
+      if (apiKey && apiKey.trim() !== '') payload.api_key = apiKey
+      if (apiSecret && apiSecret.trim() !== '') payload.api_secret = apiSecret
+      if (webhookSecret && webhookSecret.trim() !== '') payload.webhook_secret = webhookSecret
 
       if (provider) {
         await paymentService.updateProvider(provider.id, payload)
-        toast.success('Provedor atualizado.')
+        toast.success('Provedor atualizado com sucesso.')
       } else {
         await paymentService.createProvider(payload)
-        toast.success('Provedor criado.')
+        toast.success('Provedor criado com sucesso.')
       }
       onSaved()
     } catch (err) {
@@ -506,7 +596,7 @@ function ProviderModal({
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <h3 className="text-base font-bold text-slate-800">
-            {provider ? 'Editar Provedor' : 'Novo Provedor'}
+            {provider ? `Editar Provedor (${provider.name})` : 'Novo Provedor'}
           </h3>
           <button
             onClick={onClose}
@@ -530,7 +620,7 @@ function ProviderModal({
               <input
                 value={slug}
                 onChange={(e) => setSlug(e.target.value.toLowerCase())}
-                placeholder="ex: mercadopago"
+                placeholder="ex: mercadopago, stripe"
                 className="w-full px-3.5 py-2 text-sm font-mono bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
               />
             </div>
@@ -557,7 +647,7 @@ function ProviderModal({
                 onChange={(e) => setEnvironment(e.target.value as PaymentEnvironment)}
                 className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
               >
-                <option value="sandbox">Sandbox</option>
+                <option value="sandbox">Sandbox (Testes)</option>
                 <option value="production">Produção</option>
               </select>
             </div>
@@ -565,7 +655,7 @@ function ProviderModal({
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Métodos suportados
+              Métodos Suportados
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {ALL_METHODS.map((m) => {
@@ -573,6 +663,7 @@ function ProviderModal({
                 return (
                   <button
                     key={m.value}
+                    type="button"
                     onClick={() => toggleMethod(m.value)}
                     className={`px-3 py-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
                       active
@@ -588,80 +679,68 @@ function ProviderModal({
           </div>
 
           <div className="space-y-3 pt-2 border-t border-slate-100">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              Credenciais{' '}
-              {provider && (
-                <span className="font-normal normal-case">(em branco mantém o atual)</span>
-              )}
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                Credenciais de Autenticação
+              </p>
+              <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                <Lock className="w-3 h-3" /> Criptografia AES-256
+              </span>
+            </div>
+
             {isMercadoPago && (
               <p className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg p-2.5">
                 No Mercado Pago, insira a <strong>Public Key</strong> no primeiro campo e o{' '}
-                <strong>Access Token</strong> no segundo campo para evitar trocas acidentais de
-                chaves.
+                <strong>Access Token</strong> no segundo campo.
               </p>
             )}
+
+            {isStripe && (
+              <p className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg p-2.5">
+                Na Stripe, insira a <strong>Publishable Key (pk_...)</strong> no primeiro campo e a{' '}
+                <strong>Secret Key (sk_...)</strong> no segundo campo.
+              </p>
+            )}
+
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {isMercadoPago ? 'Public Key (Mercado Pago)' : 'API Key'}{' '}
-                {provider && provider.api_key_masked && (
-                  <span className="text-slate-400 font-mono">
-                    (••••{provider.api_key_masked.slice(-4)})
-                  </span>
-                )}
+                {isStripe ? 'Publishable Key (Stripe)' : isMercadoPago ? 'Public Key (Mercado Pago)' : 'API Key'}
               </label>
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={
-                  provider
-                    ? `••••${(provider.api_key_masked || '').slice(-4) || '••••'}`
-                    : isMercadoPago
-                      ? 'Public Key (Mercado Pago)'
-                      : 'Informe a API key'
-                }
+                placeholder={provider?.api_key_masked ? `Atual: ${provider.api_key_masked} (deixe em branco para manter)` : 'Informe a chave pública / API Key'}
                 className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none font-mono"
               />
             </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {isMercadoPago ? 'Access Token (Mercado Pago)' : 'API Secret'}{' '}
-                {provider && provider.api_secret_masked && (
-                  <span className="text-slate-400 font-mono">({provider.api_secret_masked})</span>
-                )}
+                {isStripe ? 'Secret Key (Stripe)' : isMercadoPago ? 'Access Token (Mercado Pago)' : 'API Secret'}
               </label>
               <input
                 type="password"
                 value={apiSecret}
                 onChange={(e) => setApiSecret(e.target.value)}
-                placeholder={
-                  provider
-                    ? '••••••••'
-                    : isMercadoPago
-                      ? 'Access Token (Mercado Pago)'
-                      : 'Informe o secret'
-                }
+                placeholder={provider?.api_secret_masked ? `Atual: ${provider.api_secret_masked} (deixe em branco para manter)` : 'Informe o Secret Key / Access Token'}
                 className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none font-mono"
               />
             </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Webhook Secret{' '}
-                {provider && provider.webhook_secret_masked && (
-                  <span className="text-slate-400 font-mono">
-                    ({provider.webhook_secret_masked})
-                  </span>
-                )}
+                Webhook Secret / Signing Secret
               </label>
               <input
                 type="password"
                 value={webhookSecret}
                 onChange={(e) => setWebhookSecret(e.target.value)}
-                placeholder={provider ? '••••••••' : 'Informe o webhook secret'}
+                placeholder={provider?.webhook_secret_masked ? `Atual: ${provider.webhook_secret_masked} (deixe em branco para manter)` : 'Informe o webhook secret'}
                 className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none font-mono"
               />
             </div>
+
             <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
               <input
                 type="checkbox"
@@ -669,7 +748,7 @@ function ProviderModal({
                 onChange={(e) => setWebhookConfigured(e.target.checked)}
                 className="w-4 h-4 rounded border-slate-300 text-indigo-600"
               />
-              Webhook configurado
+              Webhook configurado no painel do gateway
             </label>
           </div>
         </div>
@@ -683,14 +762,10 @@ function ProviderModal({
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
+            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-sm"
           >
-            {saving ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <ShieldCheck className="w-4 h-4" />
-            )}
-            Salvar
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+            Salvar Provedor
           </button>
         </div>
       </div>
@@ -698,12 +773,12 @@ function ProviderModal({
   )
 }
 
-// ----- Modal de instruções do Webhook (Mercado Pago) -----
+// ----- Modal de instruções do Webhook -----
 function WebhookInstructionsModal({
   provider,
   onClose,
 }: {
-  provider: PaymentProvider
+  provider: PaymentProviderRecord
   onClose: () => void
 }) {
   const [config, setConfig] = useState<{ webhook_url: string; instructions: string[] } | null>(null)
@@ -714,7 +789,7 @@ function WebhookInstructionsModal({
     let active = true
     setLoading(true)
     paymentService
-      .getMercadoPagoConfig()
+      .getMercadoPagoWebhookConfig()
       .then((data) => {
         if (active) setConfig({ webhook_url: data.webhook_url, instructions: data.instructions })
       })
@@ -735,10 +810,10 @@ function WebhookInstructionsModal({
     try {
       await navigator.clipboard.writeText(config.webhook_url)
       setCopied(true)
-      toast.success('URL copiada!')
+      toast.success('URL copiada com sucesso!')
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error('Erro ao copiar.')
+      toast.error('Erro ao copiar URL.')
     }
   }
 
@@ -762,7 +837,7 @@ function WebhookInstructionsModal({
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {loading ? (
             <div className="flex items-center gap-2 text-xs text-slate-400 py-6">
-              <Loader2 className="w-4 h-4 animate-spin" /> Carregando...
+              <Loader2 className="w-4 h-4 animate-spin" /> Carregando instruções...
             </div>
           ) : (
             <>
@@ -780,14 +855,14 @@ function WebhookInstructionsModal({
                     onClick={handleCopy}
                     className="shrink-0 px-3.5 py-2 text-xs font-semibold rounded-xl border bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 cursor-pointer"
                   >
-                    {copied ? 'Copiado' : 'Copiar'}
+                    {copied ? 'Copiado ✓' : 'Copiar'}
                   </button>
                 </div>
               </div>
 
               <div>
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Como configurar no painel do Mercado Pago
+                  Passos para configuração no Gateway
                 </h4>
                 <ol className="space-y-2">
                   {(config?.instructions || []).map((step, i) => (
@@ -807,16 +882,8 @@ function WebhookInstructionsModal({
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700"
               >
-                <ExternalLink className="w-3.5 h-3.5" /> Abrir painel do Mercado Pago
+                <ExternalLink className="w-3.5 h-3.5" /> Abrir painel do desenvolvedor
               </a>
-
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
-                <p className="text-[11px] text-amber-700">
-                  Após salvar a URL no painel do Mercado Pago, copie o <strong>Secret</strong>{' '}
-                  gerado e cole no campo <strong>Webhook Secret</strong> ao editar este provedor. Em
-                  ambiente de produção, toda notificação é validada via assinatura HMAC-SHA256.
-                </p>
-              </div>
             </>
           )}
         </div>
@@ -841,7 +908,7 @@ function AccountModal({
   onSaved,
 }: {
   account: FinancialAccount | null
-  providers: PaymentProvider[]
+  providers: PaymentProviderRecord[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -872,10 +939,10 @@ function AccountModal({
       }
       if (account) {
         await paymentService.updateAccount(account.id, payload)
-        toast.success('Conta atualizada.')
+        toast.success('Conta financeira atualizada.')
       } else {
         await paymentService.createAccount(payload)
-        toast.success('Conta criada.')
+        toast.success('Conta financeira criada.')
       }
       onSaved()
     } catch (err) {
@@ -977,9 +1044,9 @@ function AccountModal({
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
+            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-sm"
           >
-            <Building2 className="w-4 h-4" /> Salvar
+            <Building2 className="w-4 h-4" /> Salvar Conta
           </button>
         </div>
       </div>
