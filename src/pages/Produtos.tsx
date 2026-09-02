@@ -41,8 +41,17 @@ export default function Produtos() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [search])
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [productToEdit, setProductToEdit] = useState<Product | null>(null)
@@ -50,7 +59,7 @@ export default function Produtos() {
   const loadProducts = async () => {
     try {
       const data = await productService.getAll({
-        search,
+        search: debouncedSearch,
         category: categoryFilter,
       })
       setProducts(data)
@@ -64,7 +73,7 @@ export default function Produtos() {
 
   useEffect(() => {
     loadProducts()
-  }, [search, categoryFilter])
+  }, [debouncedSearch, categoryFilter])
 
   useRealtime<Product>('products', () => loadProducts())
 

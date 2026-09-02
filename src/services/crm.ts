@@ -16,7 +16,14 @@ import type {
 } from '@/types/crm'
 
 export const customerService = {
-  async getAll(params?: { search?: string; size?: string; status?: string; sort?: string }) {
+  async getAll(params?: {
+    search?: string
+    size?: string
+    status?: string
+    sort?: string
+    page?: number
+    limit?: number
+  }) {
     const filterParts: string[] = []
     if (params?.status && params.status !== 'all') {
       filterParts.push(`status = "${params.status}"`)
@@ -29,9 +36,20 @@ export const customerService = {
       filterParts.push(`(name ~ "${s}" || city ~ "${s}" || owner_name ~ "${s}" || phone ~ "${s}")`)
     }
 
+    const filter = filterParts.join(' && ')
+    const sort = params?.sort || '-created'
+
+    if (params?.page && params?.limit) {
+      const res = await pb.collection('customers').getList<Customer>(params.page, params.limit, {
+        filter,
+        sort,
+      })
+      return res.items
+    }
+
     return await pb.collection('customers').getFullList<Customer>({
-      filter: filterParts.join(' && '),
-      sort: params?.sort || '-created',
+      filter,
+      sort,
     })
   },
 
@@ -58,6 +76,8 @@ export const productService = {
     category?: string
     search?: string
     sort?: string
+    page?: number
+    limit?: number
   }) {
     const filterParts: string[] = []
     if (params?.activeOnly) {
@@ -71,9 +91,20 @@ export const productService = {
       filterParts.push(`(name ~ "${s}" || code ~ "${s}" || ncm ~ "${s}")`)
     }
 
+    const filter = filterParts.join(' && ')
+    const sort = params?.sort || 'name'
+
+    if (params?.page && params?.limit) {
+      const res = await pb.collection('products').getList<Product>(params.page, params.limit, {
+        filter,
+        sort,
+      })
+      return res.items
+    }
+
     return await pb.collection('products').getFullList<Product>({
-      filter: filterParts.join(' && '),
-      sort: params?.sort || 'name',
+      filter,
+      sort,
     })
   },
 
@@ -176,6 +207,8 @@ export const saleService = {
     startDate?: string
     endDate?: string
     sort?: string
+    page?: number
+    limit?: number
   }) {
     const filterParts: string[] = []
     if (params?.customerId && params.customerId !== 'all') {
@@ -197,9 +230,21 @@ export const saleService = {
       filterParts.push(`sale_date <= "${params.endDate}"`)
     }
 
+    const filter = filterParts.join(' && ')
+    const sort = params?.sort || '-sale_date,-created'
+
+    if (params?.page && params?.limit) {
+      const res = await pb.collection('sales').getList<Sale>(params.page, params.limit, {
+        filter,
+        sort,
+        expand: 'customer,seller',
+      })
+      return res.items
+    }
+
     return await pb.collection('sales').getFullList<Sale>({
-      filter: filterParts.join(' && '),
-      sort: params?.sort || '-sale_date,-created',
+      filter,
+      sort,
       expand: 'customer,seller',
     })
   },

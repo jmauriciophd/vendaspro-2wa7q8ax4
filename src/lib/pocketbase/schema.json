@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-01T20:11:14.870Z",
+  "generatedAt": "2026-09-02T11:43:21.326Z",
   "collections": [
     {
       "name": "users",
@@ -2802,6 +2802,104 @@
         "CREATE INDEX idx_analytics_page ON page_analytics_events (page, created DESC)",
         "CREATE INDEX idx_analytics_seller ON page_analytics_events (seller, created DESC)",
         "CREATE INDEX idx_analytics_event_type ON page_analytics_events (event_type)"
+      ]
+    },
+    {
+      "name": "system_rate_limits",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "key",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "points",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "expire_at",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_system_rate_limits_key ON system_rate_limits (key)",
+        "CREATE INDEX idx_system_rate_limits_expire ON system_rate_limits (expire_at)"
+      ]
+    },
+    {
+      "name": "system_locks",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "key",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "owner",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "expire_at",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_system_locks_key ON system_locks (key)",
+        "CREATE INDEX idx_system_locks_expire ON system_locks (expire_at)"
       ]
     }
   ]

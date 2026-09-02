@@ -30,8 +30,17 @@ export default function Clientes() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [sizeFilter, setSizeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [search])
 
   // Modal
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -41,7 +50,7 @@ export default function Clientes() {
   const loadCustomers = async () => {
     try {
       const data = await customerService.getAll({
-        search,
+        search: debouncedSearch,
         size: sizeFilter,
         status: statusFilter,
       })
@@ -55,7 +64,7 @@ export default function Clientes() {
 
   useEffect(() => {
     loadCustomers()
-  }, [search, sizeFilter, statusFilter])
+  }, [debouncedSearch, sizeFilter, statusFilter])
 
   useRealtime<Customer>('customers', () => loadCustomers())
 
