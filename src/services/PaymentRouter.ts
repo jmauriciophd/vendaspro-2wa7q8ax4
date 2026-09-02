@@ -1,3 +1,4 @@
+import pb from '@/lib/pocketbase/client'
 import {
   PaymentMethod,
   PaymentProviderSlug,
@@ -19,39 +20,35 @@ class PaymentRouter {
 
   async getRoutingConfig(): Promise<PaymentRouterConfigResponse> {
     try {
-      const res = await fetch('/backend/v1/payments/routing')
-      if (res.ok) {
-        return await res.json()
-      }
+      return await pb.send<PaymentRouterConfigResponse>('/backend/v1/payments/routing', {
+        method: 'GET',
+      })
     } catch {
-      // noop
-    }
-    return {
-      routes: this.defaultRoutes,
-      available_gateways: [
-        {
-          id: 'mp',
-          name: 'Mercado Pago',
-          slug: 'mercadopago',
-          methods: ['pix', 'credit_card', 'debit_card', 'boleto', 'link'],
-        },
-        { id: 'st', name: 'Stripe', slug: 'stripe', methods: ['credit_card'] },
-      ],
+      return {
+        routes: this.defaultRoutes,
+        available_gateways: [
+          {
+            id: 'mp',
+            name: 'Mercado Pago',
+            slug: 'mercadopago',
+            methods: ['pix', 'credit_card', 'debit_card', 'boleto', 'link'],
+          },
+          { id: 'st', name: 'Stripe', slug: 'stripe', methods: ['credit_card'] },
+        ],
+      }
     }
   }
 
   async updateRoutingConfig(
     routes: Partial<PaymentRouterRoutes>,
   ): Promise<{ success: boolean; routes: PaymentRouterRoutes }> {
-    const res = await fetch('/backend/v1/payments/routing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ routes }),
-    })
-    if (!res.ok) {
-      throw new Error('Falha ao atualizar rotas de pagamento.')
-    }
-    return res.json()
+    return await pb.send<{ success: boolean; routes: PaymentRouterRoutes }>(
+      '/backend/v1/payments/routing',
+      {
+        method: 'POST',
+        body: { routes },
+      },
+    )
   }
 
   async resolveGatewayForMethod(method: PaymentMethod): Promise<PaymentProviderSlug | string> {

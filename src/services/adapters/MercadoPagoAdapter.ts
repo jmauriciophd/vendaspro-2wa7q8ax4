@@ -1,3 +1,4 @@
+import pb from '@/lib/pocketbase/client'
 import {
   PaymentProviderInterface,
   PaymentProviderSlug,
@@ -55,22 +56,16 @@ export class MercadoPagoAdapter implements PaymentProviderInterface {
   }
 
   async createCharge(params: CreateChargeParams): Promise<ChargeCreationResult> {
-    const res = await fetch('/backend/v1/payments/charges', {
+    const data = await pb.send<any>('/backend/v1/payments/charges', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         sale_id: params.saleId,
         payment_method: params.method,
         discount_amount: params.discountAmount || 0,
         installments: params.installments || 1,
         expires_at: params.expiresAt,
-      }),
+      },
     })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.message || 'Não foi possível gerar cobrança via Mercado Pago.')
-    }
-    const data = await res.json()
     return {
       chargeId: data.id,
       externalChargeId: data.external_charge_id,
@@ -91,14 +86,12 @@ export class MercadoPagoAdapter implements PaymentProviderInterface {
     chargeId: string,
     payload: IntegratedCardPaymentPayload,
   ): Promise<IntegratedPaymentResult> {
-    const res = await fetch(`/backend/v1/payments/charges/${chargeId}/process-integrated`, {
+    const data = await pb.send<any>(`/backend/v1/payments/charges/${chargeId}/process-integrated`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: payload,
     })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok || !data.success) {
-      throw new Error(data.message || 'Falha ao processar pagamento com cartão.')
+    if (!data || data.success === false) {
+      throw new Error(data?.message || 'Falha ao processar pagamento com cartão.')
     }
     return {
       success: true,
@@ -110,28 +103,37 @@ export class MercadoPagoAdapter implements PaymentProviderInterface {
   }
 
   async getPaymentStatus(chargeId: string): Promise<ChargeStatus> {
-    const res = await fetch(`/backend/v1/payments/charges/${chargeId}/verify`, { method: 'POST' })
-    if (!res.ok) throw new Error('Falha ao verificar status no Mercado Pago.')
-    const data = await res.json()
+    const data = await pb.send<any>(`/backend/v1/payments/charges/${chargeId}/verify`, {
+      method: 'POST',
+    })
     return this.mapStatus(data.status)
   }
 
   async cancelPayment(chargeId: string): Promise<boolean> {
-    const res = await fetch(`/backend/v1/payments/charges/${chargeId}/cancel`, { method: 'PUT' })
-    return res.ok
+    try {
+      await pb.send(`/backend/v1/payments/charges/${chargeId}/cancel`, { method: 'PUT' })
+      return true
+    } catch {
+      return false
+    }
   }
 
   async refundPayment(chargeId: string, amount?: number, reason?: string): Promise<boolean> {
-    const res = await fetch(`/backend/v1/payments/charges/${chargeId}/refund`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount, reason }),
-    })
-    return res.ok
+    try {
+      await pb.send(`/backend/v1/payments/charges/${chargeId}/refund`, {
+        method: 'POST',
+        body: { amount, reason },
+      })
+      return true
+    } catch {
+      return false
+    }
   }
 
   async testConnection(): Promise<ProviderConnectionTestResult> {
-    const res = await fetch('/backend/v1/payments/providers/mercadopago/test', { method: 'POST' })
-    return res.json()
+    return await pb.send<ProviderConnectionTestResult>(
+      '/backend/v1/payments/providers/mercadopago/test',
+      { method: 'POST' },
+    )
   }
 }

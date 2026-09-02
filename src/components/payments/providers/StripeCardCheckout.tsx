@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import pb from '@/lib/pocketbase/client'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CreditCard, Lock, ShieldCheck, AlertTriangle } from 'lucide-react'
 import { formatMoney } from '@/services/paymentService'
@@ -71,22 +72,23 @@ export const StripeCardCheckout: React.FC<StripeCardCheckoutProps> = ({
 
     setLoading(true)
     try {
-      const res = await fetch(`/backend/v1/payments/charges/${chargeId}/process-integrated`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: 'pm_card_simulated_' + Math.random().toString(36).substring(2, 8),
-          payment_method_id: 'card',
-          installments: 1,
-          payer: {
-            email: email || 'cliente@vendaspro.com',
+      const data = await pb.send<any>(
+        `/backend/v1/payments/charges/${chargeId}/process-integrated`,
+        {
+          method: 'POST',
+          body: {
+            token: 'pm_card_simulated_' + Math.random().toString(36).substring(2, 8),
+            payment_method_id: 'card',
+            installments: 1,
+            payer: {
+              email: email || 'cliente@vendaspro.com',
+            },
           },
-        }),
-      })
+        },
+      )
 
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Falha ao processar pagamento via Stripe.')
+      if (!data || data.success === false) {
+        throw new Error(data?.message || 'Falha ao processar pagamento via Stripe.')
       }
 
       onSuccess(data)

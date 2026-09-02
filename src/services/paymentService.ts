@@ -31,50 +31,32 @@ import {
   ProviderConnectionTestResult,
   PaymentProviderInterface,
 } from '@/types/payments'
+import pb from '@/lib/pocketbase/client'
 import { MercadoPagoAdapter } from './adapters/MercadoPagoAdapter'
 import { StripePaymentProvider } from './adapters/StripePaymentProvider'
 import { paymentProviderRegistry } from './PaymentProviderRegistry'
 import { paymentProviderFactory } from './PaymentProviderFactory'
 import { paymentRouter } from './PaymentRouter'
 
-const API_BASE = '/backend/v1'
+async function request<T>(
+  path: string,
+  options: {
+    method?: string
+    body?: any
+    headers?: Record<string, string>
+    query?: Record<string, any>
+  } = {},
+): Promise<T> {
+  const normalizedPath = path.startsWith('/backend/v1')
+    ? path
+    : `/backend/v1${path.startsWith('/') ? path : `/${path}`}`
 
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('pocketbase_auth')
-  let authToken = ''
-  if (token) {
-    try {
-      const parsed = JSON.parse(token)
-      authToken = parsed?.token || ''
-    } catch {
-      authToken = ''
-    }
-  }
-  return {
-    'Content-Type': 'application/json',
-    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-  }
-}
-
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE}${path}`
-  const headers = {
-    ...getAuthHeaders(),
-    ...(options.headers || {}),
-  }
-
-  const res = await fetch(url, { credentials: 'omit', ...options, headers })
-  if (!res.ok) {
-    let errMessage = `Erro na requisição (${res.status})`
-    try {
-      const errJson = await res.json()
-      if (errJson?.message) errMessage = errJson.message
-    } catch {
-      // noop
-    }
-    throw new Error(errMessage)
-  }
-  return res.json()
+  return await pb.send<T>(normalizedPath, {
+    method: options.method || 'GET',
+    body: options.body,
+    headers: options.headers,
+    query: options.query,
+  })
 }
 
 /**
