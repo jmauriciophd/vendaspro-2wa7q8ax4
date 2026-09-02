@@ -530,7 +530,22 @@ export default function PaymentChargeDetail() {
                 </div>
 
                 {charge.status === 'pending' || charge.status === 'waiting_payment' ? (
-                  <PaymentIntegratedCheckout charge={charge} onPaymentSuccess={load} />
+                  <PaymentIntegratedCheckout
+                    charge={charge}
+                    chargeId={charge.id}
+                    amount={charge.final_amount}
+                    customerName={charge.client_name}
+                    defaultMethod={
+                      (charge.payment_method as string) === 'pix'
+                        ? 'pix'
+                        : (charge.payment_method as string) === 'boleto'
+                          ? 'boleto'
+                          : (charge.payment_method as string) === 'credit_card'
+                            ? 'credit_card'
+                            : undefined
+                    }
+                    onPaymentSuccess={load}
+                  />
                 ) : charge.status === 'paid' ? (
                   <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
                     <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">

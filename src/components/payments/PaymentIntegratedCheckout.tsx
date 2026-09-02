@@ -21,28 +21,34 @@ import { ProviderPixCheckout } from './providers/ProviderPixCheckout'
 import { BoletoView } from './BoletoView'
 
 interface PaymentIntegratedCheckoutProps {
-  chargeId: string
-  amount: number
+  charge?: any
+  chargeId?: string
+  amount?: number
   customerEmail?: string
   customerName?: string
   customerDoc?: string
   installments?: number
   defaultMethod?: 'pix' | 'credit_card' | 'boleto'
-  onPaymentSuccess?: (result: any) => void
+  onPaymentSuccess?: (result?: any) => void
   onPaymentError?: (error: string) => void
 }
 
 export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps> = ({
-  chargeId,
-  amount,
-  customerEmail = '',
-  customerName = '',
+  charge,
+  chargeId: propChargeId,
+  amount: propAmount,
+  customerEmail: propCustomerEmail = '',
+  customerName: propCustomerName = '',
   customerDoc = '',
   installments = 1,
   defaultMethod = 'credit_card',
   onPaymentSuccess,
   onPaymentError,
 }) => {
+  const chargeId = propChargeId || charge?.id || ''
+  const amount = propAmount ?? charge?.final_amount ?? 0
+  const customerEmail = propCustomerEmail || charge?.customer_email || ''
+  const customerName = propCustomerName || charge?.client_name || ''
   const [activeTab, setActiveTab] = useState<'pix' | 'credit_card' | 'boleto'>(defaultMethod)
   const [loadingCharge, setLoadingCharge] = useState(true)
   const [chargeData, setChargeData] = useState<any>(null)
@@ -366,17 +372,19 @@ export const PaymentIntegratedCheckout: React.FC<PaymentIntegratedCheckoutProps>
           <TabsContent value="boleto">
             {chargeData?.boleto_url || chargeData?.boleto_digitable_line ? (
               <BoletoView
-                data={{
-                  chargeId: chargeData.id,
-                  externalChargeId: chargeData.external_charge_id,
-                  amount: chargeData.final_amount,
-                  dueDate: chargeData.expires_at,
-                  barcode: chargeData.boleto_barcode,
-                  digitableLine: chargeData.boleto_digitable_line,
-                  pdfUrl: chargeData.boleto_url,
-                  documentNumber: chargeData.boleto_document_number,
-                  customerName: chargeData.client_name || customerName,
-                }}
+                charge={
+                  {
+                    id: chargeData.id,
+                    external_charge_id: chargeData.external_charge_id,
+                    final_amount: chargeData.final_amount,
+                    expires_at: chargeData.expires_at,
+                    boleto_barcode: chargeData.boleto_barcode,
+                    boleto_digitable_line: chargeData.boleto_digitable_line,
+                    boleto_url: chargeData.boleto_url,
+                    boleto_document_number: chargeData.boleto_document_number,
+                    client_name: chargeData.client_name || customerName,
+                  } as any
+                }
               />
             ) : (
               <div className="text-center py-6 bg-gray-50 border rounded-lg">

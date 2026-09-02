@@ -33,7 +33,9 @@ export interface BoletoViewData {
 }
 
 interface BoletoViewProps {
-  boleto: BoletoViewData
+  boleto?: BoletoViewData
+  charge?: any
+  data?: any
   /** Dados do cedente (empresa). Opcional — usa defaults do VendasPro. */
   cedente?: {
     name?: string
@@ -51,11 +53,42 @@ interface BoletoViewProps {
  * valor, vencimento, código de barras e linha digitável.
  */
 export const BoletoView: React.FC<BoletoViewProps> = ({
-  boleto,
+  boleto: propBoleto,
+  charge,
+  data,
   cedente,
   className = '',
   hideActions = false,
 }) => {
+  const boleto: BoletoViewData =
+    propBoleto ||
+    (charge
+      ? {
+          boleto_url: charge.boleto_url,
+          boleto_barcode: charge.boleto_barcode,
+          boleto_digitable_line: charge.boleto_digitable_line,
+          boleto_nosso_numero: charge.boleto_nosso_numero,
+          boleto_document_number: charge.boleto_document_number,
+          final_amount: charge.final_amount,
+          expires_at: charge.expires_at,
+          client_name: charge.client_name,
+          provider_name: charge.provider_name,
+          external_charge_id: charge.external_charge_id,
+        }
+      : data
+        ? {
+            boleto_url: data.pdfUrl || data.boleto_url,
+            boleto_barcode: data.barcode || data.boleto_barcode,
+            boleto_digitable_line: data.digitableLine || data.boleto_digitable_line,
+            boleto_nosso_numero: data.nossoNumero || data.boleto_nosso_numero,
+            boleto_document_number: data.documentNumber || data.boleto_document_number,
+            final_amount: data.amount || data.final_amount,
+            expires_at: data.dueDate || data.expires_at,
+            client_name: data.customerName || data.client_name,
+            provider_name: data.providerName || data.provider_name,
+            external_charge_id: data.externalChargeId || data.external_charge_id,
+          }
+        : {})
   const [copiedField, setCopiedField] = useState<'line' | 'barcode' | null>(null)
 
   const handleCopy = async (value: string, field: 'line' | 'barcode') => {

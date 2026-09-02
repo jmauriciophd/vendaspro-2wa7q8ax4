@@ -207,15 +207,20 @@ class PaymentServiceImpl {
     })
   }
 
+  async listChargesBySale(saleId: string): Promise<PaymentCharge[]> {
+    return this.listCharges({ sale_id: saleId })
+  }
+
   async manualConfirm(
     id: string,
-    payload: ManualConfirmPayload,
+    payload: ManualConfirmPayload | string,
   ): Promise<{ id: string; status: ChargeStatus; paid_at: string; reason: string }> {
+    const body = typeof payload === 'string' ? { reason: payload } : payload
     return request<{ id: string; status: ChargeStatus; paid_at: string; reason: string }>(
       `/payments/charges/${id}/manual-confirm`,
       {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       },
     )
   }
@@ -233,10 +238,21 @@ class PaymentServiceImpl {
     )
   }
 
-  async regenerateBoleto(id: string, payload: RegenerateBoletoPayload): Promise<PaymentCharge> {
+  async refund(
+    id: string,
+    payload: RefundPayload = {},
+  ): Promise<{ id: string; status: ChargeStatus; refunded_amount: number; reason: string }> {
+    return this.refundCharge(id, payload)
+  }
+
+  async regenerateBoleto(
+    id: string,
+    payload: RegenerateBoletoPayload | string,
+  ): Promise<PaymentCharge> {
+    const body = typeof payload === 'string' ? { expires_at: payload } : payload
     return request<PaymentCharge>(`/payments/charges/${id}/regenerate-boleto`, {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     })
   }
 
@@ -260,21 +276,59 @@ class PaymentServiceImpl {
     }
   }
 
+  async sendCharge(id: string, payload: SendMessagePayload): Promise<SendMessageResult> {
+    return this.sendMessage(id, payload)
+  }
+
+  async checkStatus(
+    id: string,
+  ): Promise<{ id: string; status?: ChargeStatus | string; message: string }> {
+    const res = await this.verifyCharge(id)
+    return {
+      id,
+      status: res.status,
+      message: res.message || 'Status verificado.',
+    }
+  }
+
   // DASHBOARDS E RELATÓRIOS
   async getDashboard(): Promise<PaymentDashboardMetrics> {
     return request<PaymentDashboardMetrics>('/payments/dashboard')
+  }
+
+  async dashboard(): Promise<PaymentDashboardMetrics> {
+    return this.getDashboard()
   }
 
   async getSellerDashboard(): Promise<SellerPaymentMetrics> {
     return request<SellerPaymentMetrics>('/payments/seller-dashboard')
   }
 
-  async getFinancialReport(): Promise<FinancialReportData> {
-    return request<FinancialReportData>('/reports/financial')
+  async sellerDashboard(): Promise<SellerPaymentMetrics> {
+    return this.getSellerDashboard()
+  }
+
+  async getFinancialReport(params?: {
+    month?: number
+    year?: number
+  }): Promise<FinancialReportData> {
+    const q = new URLSearchParams()
+    if (params?.month) q.set('month', String(params.month))
+    if (params?.year) q.set('year', String(params.year))
+    const qs = q.toString() ? `?${q.toString()}` : ''
+    return request<FinancialReportData>(`/reports/financial${qs}`)
+  }
+
+  async financialReport(params?: { month?: number; year?: number }): Promise<FinancialReportData> {
+    return this.getFinancialReport(params)
   }
 
   async getReconciliationReport(): Promise<ReconciliationReportData> {
     return request<ReconciliationReportData>('/payments/reconciliation')
+  }
+
+  async reconciliation(): Promise<ReconciliationReportData> {
+    return this.getReconciliationReport()
   }
 
   // WEBHOOKS
@@ -425,19 +479,58 @@ export const auditActionLabels: Record<string, string> = {
   status_checked: 'Status verificado',
 }
 
-export const resolvePaymentUrl = (charge: { id: string; payment_url?: string }): string => {
-  if (
-    charge.payment_url &&
-    (charge.payment_url.startsWith('http://') || charge.payment_url.startsWith('https://'))
-  ) {
-    return charge.payment_url
+export const resolvePaymentUrl = (
+  chargeOrUrl?: { id?: string; payment_url?: string } | string | null,
+  chargeId?: string,
+): string => {
+  let url: string | undefined
+  let id: string | undefined
+
+  if (typeof chargeOrUrl === 'string') {
+    url = chargeOrUrl
+    id = chargeId
+  } else if (chargeOrUrl && typeof chargeOrUrl === 'object') {
+    url = chargeOrUrl.payment_url
+    id = chargeOrUrl.id || chargeId
+  } else {
+    id = chargeId
+  }
+
+  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+    return url
   }
   const base = typeof window !== 'undefined' && window.location.origin ? window.location.origin : ''
-  if (charge.payment_url) {
-    const p = charge.payment_url.startsWith('/') ? charge.payment_url : `/${charge.payment_url}`
+  if (url) {
+    const p = url.startsWith('/') ? url : `/${url}`
     return `${base}${p}`
   }
-  return `${base}/financeiro/cobrancas/${charge.id}`
+  if (id) {
+    return `${base}/financeiro/cobrancas/${id}`
+  }
+  return ''
+}
+
+export const isBoletoExpired = (expiresAt: string | null | undefined): boolean => {
+  if (!expiresAt) return false
+  const exp = new Date(expiresAt)
+  if (isNaN(exp.getTime())) return false
+  return exp.getTime() < Date.now()
+}
+
+export const formatBoletoDigitableLine = (line: string | null | undefined): string => {
+  if (!line || !line.trim()) return '—'
+  const clean = line.trim()
+  if (clean.includes(' ') || clean.includes('.')) {
+    return clean
+  }
+  const digits = clean.replace(/\D/g, '')
+  if (digits.length === 47) {
+    return `${digits.slice(0, 5)}.${digits.slice(5, 10)} ${digits.slice(10, 15)}.${digits.slice(15, 21)} ${digits.slice(21, 26)}.${digits.slice(26, 32)} ${digits.slice(32, 33)} ${digits.slice(33, 47)}`
+  }
+  if (digits.length === 48) {
+    return `${digits.slice(0, 12)} ${digits.slice(12, 24)} ${digits.slice(24, 36)} ${digits.slice(36, 48)}`
+  }
+  return clean
 }
 
 export const formatMoney = (val: number | string | undefined | null): string => {

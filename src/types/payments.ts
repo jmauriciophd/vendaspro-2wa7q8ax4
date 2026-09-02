@@ -130,6 +130,7 @@ export interface PaymentChargeTimelineItem {
   action: AuditAction | string
   user_id?: string
   user_name?: string
+  ip_address?: string
   reference?: string
   previous_data?: Record<string, unknown>
   new_data?: Record<string, unknown>
@@ -271,6 +272,12 @@ export interface PaymentDashboardMetrics {
   total_received: number
   paid_count: number
   conversion_rate: number
+  received_today?: number
+  received_today_count?: number
+  pending_count?: number
+  pending_value?: number
+  expired_count?: number
+  expired_value?: number
 }
 
 export interface SellerPaymentMetrics {
@@ -281,6 +288,7 @@ export interface SellerPaymentMetrics {
   expired_count: number
   recent_received: Array<{
     id: string
+    sale_id?: string
     client_name: string
     final_amount: number
     paid_at: string
@@ -300,6 +308,15 @@ export interface FinancialReportData {
   }
   by_provider: Array<{
     provider: string
+    provider_id?: string
+    provider_name?: string
+    quantidade_cobrancas?: number
+    total_cobrado?: number
+    total_recebido?: number
+    total_taxas?: number
+    total_liquido?: number
+    ticket_medio?: number
+    taxa_conversao?: number
     total: number
     count: number
   }>
@@ -312,55 +329,51 @@ export interface FinancialReportData {
     method: PaymentMethod
     total: number
     count: number
+    valor_total?: number
   }>
   timeline: Array<{
     date: string
     cobrado: number
     recebido: number
+    valor?: number
+    provider_name?: string
+    method?: string
+    client?: string
   }>
 }
 
+export interface ReconciliationItemCommon {
+  id: string
+  sale_id: string
+  client_name: string
+  provider: string
+  system_amount: number
+  provider_amount: number
+  fee?: number
+  net?: number
+  status?: string
+  date: string
+  divergence_type?: string
+  divergence_detail?: string
+  external_id?: string
+  external_charge_id?: string
+  client_id?: string
+  provider_name?: string
+  payment_method?: PaymentMethod | string
+  final_amount?: number
+  created?: string
+  amount?: number
+  details?: string
+  expected_amount?: number
+  paid_amount?: number
+  remaining?: number
+}
+
 export interface ReconciliationReportData {
-  reconciled: Array<{
-    id: string
-    sale_id: string
-    client_name: string
-    provider: string
-    system_amount: number
-    provider_amount: number
-    fee: number
-    net: number
-    status: string
-    date: string
-  }>
-  divergent: Array<{
-    id: string
-    sale_id: string
-    client_name: string
-    provider: string
-    system_amount: number
-    provider_amount: number
-    divergence_type: string
-    divergence_detail: string
-    date: string
-  }>
-  unidentified: Array<{
-    id: string
-    external_id: string
-    provider: string
-    amount: number
-    date: string
-    details: string
-  }>
-  partial: Array<{
-    id: string
-    sale_id: string
-    client_name: string
-    expected_amount: number
-    paid_amount: number
-    remaining: number
-    date: string
-  }>
+  reconciled: Array<ReconciliationItemCommon>
+  divergent: Array<ReconciliationItemCommon>
+  unidentified: Array<ReconciliationItemCommon>
+  partial: Array<ReconciliationItemCommon>
   counts: {
     reconciled: number
     divergent: number
@@ -425,7 +438,10 @@ export interface PaymentProviderInterface {
   readonly capabilities: PaymentProviderCapabilities
 
   createCharge(params: CreateChargeParams): Promise<ChargeCreationResult>
-  createPayment(chargeId: string, payload: IntegratedCardPaymentPayload): Promise<IntegratedPaymentResult>
+  createPayment(
+    chargeId: string,
+    payload: IntegratedCardPaymentPayload,
+  ): Promise<IntegratedPaymentResult>
   getPaymentStatus(chargeId: string): Promise<ChargeStatus>
   cancelPayment(chargeId: string): Promise<boolean>
   refundPayment(chargeId: string, amount?: number, reason?: string): Promise<boolean>
