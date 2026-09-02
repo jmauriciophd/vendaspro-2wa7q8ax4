@@ -98,7 +98,12 @@ export default function PaymentSettings() {
   }
 
   const handleDeleteProvider = async (p: PaymentProviderRecord) => {
-    if (!confirm(`Desativar o provedor "${p.name}"? O histórico de cobranças e webhooks antigos serão preservados.`)) return
+    if (
+      !confirm(
+        `Desativar o provedor "${p.name}"? O histórico de cobranças e webhooks antigos serão preservados.`,
+      )
+    )
+      return
     try {
       await paymentService.deleteProvider(p.id)
       toast.success('Provedor desativado com sucesso.')
@@ -193,7 +198,8 @@ export default function PaymentSettings() {
             <div>
               <h3 className="text-sm font-bold text-slate-700">Provedores de Pagamento</h3>
               <p className="text-xs text-slate-500">
-                Credenciais são criptografadas em repouso no backend (AES-256) e mascaradas no frontend.
+                Credenciais são criptografadas em repouso no backend (AES-256) e mascaradas no
+                frontend.
               </p>
             </div>
             <button
@@ -272,7 +278,10 @@ export default function PaymentSettings() {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono">
                             <Lock className="w-3 h-3 text-emerald-600" />
-                            <span>{p.api_key_masked || (p.is_configured ? '••••••••' : 'Não configurado')}</span>
+                            <span>
+                              {p.api_key_masked ||
+                                (p.is_configured ? '••••••••' : 'Não configurado')}
+                            </span>
                           </div>
                         </td>
                         <td className="py-3 px-4">
@@ -345,17 +354,23 @@ export default function PaymentSettings() {
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
             <div className="flex items-center gap-2 mb-1">
               <Route className="w-5 h-5 text-indigo-600" />
-              <h3 className="text-base font-bold text-slate-900">Roteamento de Pagamentos (PaymentRouter)</h3>
+              <h3 className="text-base font-bold text-slate-900">
+                Roteamento de Pagamentos (PaymentRouter)
+              </h3>
             </div>
             <p className="text-xs text-slate-500 mb-6">
-              Defina qual Gateway ativo processará cada método de pagamento automaticamente no Checkout e Cobranças.
+              Defina qual Gateway ativo processará cada método de pagamento automaticamente no
+              Checkout e Cobranças.
             </p>
 
             <div className="space-y-4 max-w-xl">
               {ALL_METHODS.map((m) => {
                 const currentGateway = routes[m.value] || 'mercadopago'
                 return (
-                  <div key={m.value} className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <div
+                    key={m.value}
+                    className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-100"
+                  >
                     <div className="flex items-center gap-2.5">
                       <Zap className="w-4 h-4 text-indigo-500" />
                       <div>
@@ -366,7 +381,9 @@ export default function PaymentSettings() {
 
                     <select
                       value={currentGateway}
-                      onChange={(e) => setRoutes({ ...routes, [m.value]: e.target.value as PaymentProviderSlug })}
+                      onChange={(e) =>
+                        setRoutes({ ...routes, [m.value]: e.target.value as PaymentProviderSlug })
+                      }
                       className="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       {providers.map((pr) => (
@@ -385,7 +402,11 @@ export default function PaymentSettings() {
                   disabled={savingRouting}
                   className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-sm"
                 >
-                  {savingRouting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                  {savingRouting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="w-4 h-4" />
+                  )}
                   Salvar Regras de Roteamento
                 </button>
               </div>
@@ -548,7 +569,8 @@ function ProviderModal({
   const [webhookConfigured, setWebhookConfigured] = useState(provider?.webhook_configured || false)
   const [saving, setSaving] = useState(false)
 
-  const isMercadoPago = slug.trim().toLowerCase() === 'mercadopago' || provider?.slug === 'mercadopago'
+  const isMercadoPago =
+    slug.trim().toLowerCase() === 'mercadopago' || provider?.slug === 'mercadopago'
   const isStripe = slug.trim().toLowerCase() === 'stripe' || provider?.slug === 'stripe'
 
   const toggleMethod = (m: PaymentMethod) => {
@@ -704,26 +726,42 @@ function ProviderModal({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {isStripe ? 'Publishable Key (Stripe)' : isMercadoPago ? 'Public Key (Mercado Pago)' : 'API Key'}
+                {isStripe
+                  ? 'Publishable Key (Stripe)'
+                  : isMercadoPago
+                    ? 'Public Key (Mercado Pago)'
+                    : 'API Key'}
               </label>
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={provider?.api_key_masked ? `Atual: ${provider.api_key_masked} (deixe em branco para manter)` : 'Informe a chave pública / API Key'}
+                placeholder={
+                  provider?.api_key_masked
+                    ? `Atual: ${provider.api_key_masked} (deixe em branco para manter)`
+                    : 'Informe a chave pública / API Key'
+                }
                 className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none font-mono"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {isStripe ? 'Secret Key (Stripe)' : isMercadoPago ? 'Access Token (Mercado Pago)' : 'API Secret'}
+                {isStripe
+                  ? 'Secret Key (Stripe)'
+                  : isMercadoPago
+                    ? 'Access Token (Mercado Pago)'
+                    : 'API Secret'}
               </label>
               <input
                 type="password"
                 value={apiSecret}
                 onChange={(e) => setApiSecret(e.target.value)}
-                placeholder={provider?.api_secret_masked ? `Atual: ${provider.api_secret_masked} (deixe em branco para manter)` : 'Informe o Secret Key / Access Token'}
+                placeholder={
+                  provider?.api_secret_masked
+                    ? `Atual: ${provider.api_secret_masked} (deixe em branco para manter)`
+                    : 'Informe o Secret Key / Access Token'
+                }
                 className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none font-mono"
               />
             </div>
@@ -736,7 +774,11 @@ function ProviderModal({
                 type="password"
                 value={webhookSecret}
                 onChange={(e) => setWebhookSecret(e.target.value)}
-                placeholder={provider?.webhook_secret_masked ? `Atual: ${provider.webhook_secret_masked} (deixe em branco para manter)` : 'Informe o webhook secret'}
+                placeholder={
+                  provider?.webhook_secret_masked
+                    ? `Atual: ${provider.webhook_secret_masked} (deixe em branco para manter)`
+                    : 'Informe o webhook secret'
+                }
                 className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none font-mono"
               />
             </div>
@@ -764,7 +806,11 @@ function ProviderModal({
             disabled={saving}
             className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-sm"
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <ShieldCheck className="w-4 h-4" />
+            )}
             Salvar Provedor
           </button>
         </div>

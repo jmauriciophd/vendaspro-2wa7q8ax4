@@ -56,7 +56,7 @@ export interface PaymentProviderRecord {
   environment: PaymentEnvironment
   methods: PaymentMethod[]
   priority?: number
-  capabilities: PaymentProviderCapabilities
+  capabilities?: PaymentProviderCapabilities
   webhook_configured: boolean
   webhook_url?: string
   last_sync?: string
@@ -67,6 +67,18 @@ export interface PaymentProviderRecord {
   webhook_secret_masked?: string
   is_configured?: boolean
 }
+
+// Aliases para compatibilidade total com páginas existentes
+export type PaymentProvider = PaymentProviderRecord
+export type PaymentChargeDetail = PaymentCharge
+export type PaymentChargeListItem = PaymentCharge
+export type CreateChargeResult = PaymentCharge
+export type ChargeAuditEntry = PaymentChargeTimelineItem
+export type PaymentsDashboard = PaymentDashboardMetrics
+export type SellerPaymentDashboard = SellerPaymentMetrics
+export type FinancialReport = FinancialReportData
+export type ReconciliationData = ReconciliationReportData
+export type ReconciliationItem = ReconciliationReportData['reconciled'][0]
 
 export interface PaymentProviderInput {
   name: string
@@ -247,6 +259,8 @@ export interface WebhookTestResult {
 export interface VerifyChargeResult {
   id: string
   status: ChargeStatus
+  previous_status?: ChargeStatus | string
+  provider_status?: string
   updated: boolean
   checked_at: string
   message: string
@@ -373,7 +387,6 @@ export interface PaymentRouterConfigResponse {
   }>
 }
 
-// CONTRATO DA INTERFACE PaymentProvider
 export interface CreateChargeParams {
   saleId: string
   clientId: string
@@ -412,10 +425,7 @@ export interface PaymentProviderInterface {
   readonly capabilities: PaymentProviderCapabilities
 
   createCharge(params: CreateChargeParams): Promise<ChargeCreationResult>
-  createPayment(
-    chargeId: string,
-    payload: IntegratedCardPaymentPayload,
-  ): Promise<IntegratedPaymentResult>
+  createPayment(chargeId: string, payload: IntegratedCardPaymentPayload): Promise<IntegratedPaymentResult>
   getPaymentStatus(chargeId: string): Promise<ChargeStatus>
   cancelPayment(chargeId: string): Promise<boolean>
   refundPayment(chargeId: string, amount?: number, reason?: string): Promise<boolean>
